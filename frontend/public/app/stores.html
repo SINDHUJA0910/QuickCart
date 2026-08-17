@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Find a store — QuickCart</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+<style>
+  .hero-search { padding: 18px 20px 4px; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="topbar">
+    <a href="../index.html" class="logo"><span class="logo-mark" aria-hidden="true"></span>QuickCart</a>
+    <div style="display:flex; align-items:center; gap: 10px;">
+      <button class="theme-toggle" aria-label="Toggle dark mode"></button>
+      <button class="icon-btn" id="logoutBtn" aria-label="Sign out" title="Sign out">&#8594;</button>
+    </div>
+  </div>
+
+  <div class="hero-search">
+    <span class="eyebrow">Step 1 of 4</span>
+    <h1 class="page-title" style="font-size: 28px; margin-top: 10px;">Find a store</h1>
+  </div>
+
+  <main class="app-main">
+    <div class="search-bar">
+      <span aria-hidden="true">&#128269;</span>
+      <input type="text" id="searchInput" placeholder="Search stores by name" />
+    </div>
+    <div class="filter-chips" id="filterChips">
+      <button class="chip active" data-type="">All</button>
+      <button class="chip" data-type="grocery">Grocery</button>
+      <button class="chip" data-type="hypermarket">Hypermarket</button>
+      <button class="chip" data-type="mini_mart">Mini Mart</button>
+    </div>
+
+    <div class="banner banner-info" id="locationBanner">
+      <span>&#128205;</span>
+      <span>Turn on location to sort stores by distance. <button id="enableLocationBtn" style="background:none;border:none;color:var(--amber-deep);font-weight:600;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;">Enable</button></span>
+    </div>
+    <div class="banner banner-error hidden" id="errorBanner" role="alert"></div>
+
+    <div id="resultsList"></div>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="./stores.html" class="active"><span class="nav-icon">&#127978;</span>Stores</a>
+    <a href="./notifications.html"><span class="nav-icon">&#128276;</span>Alerts</a>
+    <a href="./account.html"><span class="nav-icon">&#128100;</span>Account</a>
+  </nav>
+</div>
+
+<script type="module">
+  import { api, ApiError, isLoggedIn, clearSession } from '../assets/js/api-client.js';
+  import { initTheme, showToast } from '../assets/js/ui.js';
+
+  initTheme();
+
+  if (!isLoggedIn()) {
+    window.location.href = './login.html';
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    clearSession();
+    window.location.href = './login.html';
+  });
+
+  const resultsList = document.getElementById('resultsList');
+  const errorBanner = document.getElementById('errorBanner');
+  const locationBanner = document.getElementById('locationBanner');
+  const searchInput = document.getElementById('searchInput');
+  const chips = document.querySelectorAll('.chip');
+
+  let coords = null;
+  let activeType = '';
+  let searchTimer = null;
+
+  function renderSkeletons() {
+    resultsList.innerHTML = Array.from({ length: 3 }).map(() => `
+      <div class="store-card" style="cursor:default;">
+        <div class="skeleton" style="width:56px;height:56px;border-radius:14px;"></div>
+        <div class="info">
+          <div class="skeleton" style="width:60%;height:14px;margin-bottom:8px;"></div>
+          <div class="skeleton" style="width:40%;height:11px;"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderStores(stores) {
+    if (stores.length === 0) {
+      resultsList.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">&#128722;</div>
+          <p>No stores match your search yet.<br>Try a different name or filter.</p>
+        </div>`;
+      return;
+    }
+
+    const icons = { grocery: '&#127811;', hypermarket: '&#127978;', mini_mart: '&#127978;' };
+    resultsList.innerHTML = stores.map(store => `
+      <button class="store-card" data-store-id="${store.id}" data-store-name="${escapeHtml(store.name)}">
+        <div class="thumb">${icons[store.store_type] || '&#127978;'}</div>
+        <div class="info">
+          <div class="name">${escapeHtml(store.name)}</div>
+          <div class="meta">
+            <span class="badge">${store.store_type.replace('_', ' ')}</span>
+            ${store.rating ? `<span>&#9733; ${store.rating.toFixed(1)}</span>` : ''}
+            ${store.opening_time ? `<span>${store.opening_time}–${store.closing_time || ''}</span>` : ''}
+          </div>
+        </div>
+        ${store.distance_km !== null && store.distance_km !== undefined ? `<div class="distance mono">${store.distance_km} km</div>` : ''}
+      </button>
+    `).join('');
+
+    resultsList.querySelectorAll('.store-card').forEach(card => {
+      card.addEventListener('click', () => selectStore(card.dataset.storeId, card.dataset.storeName));
+    });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function selectStore(storeId, storeName) {
+    errorBanner.classList.add('hidden');
+    try {
+      const session = await api.createSession(storeId);
+      window.location.href = `./shop.html?session=${session.id}`;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Already has an active session — likely at this same store from a previous visit
+        try {
+          const active = await api.getActiveSession();
+          window.location.href = `./shop.html?session=${active.id}`;
+          return;
+        } catch {
+          // fall through to generic error
+        }
+      }
+      errorBanner.textContent = (err instanceof ApiError && err.detail) || 'Could not start a shopping session. Please try again.';
+      errorBanner.classList.remove('hidden');
+    }
+  }
+
+  async function search() {
+    renderSkeletons();
+    errorBanner.classList.add('hidden');
+    try {
+      const query = {
+        q: searchInput.value.trim() || undefined,
+        store_type: activeType || undefined,
+      };
+      if (coords) { query.lat = coords.lat; query.lng = coords.lng; }
+      const stores = await api.searchStores(query);
+      renderStores(stores);
+    } catch (err) {
+      resultsList.innerHTML = '';
+      errorBanner.textContent = (err instanceof ApiError && err.detail) || 'Could not load stores right now.';
+      errorBanner.classList.remove('hidden');
+    }
+  }
+
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(search, 350);
+  });
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      activeType = chip.dataset.type;
+      search();
+    });
+  });
+
+  document.getElementById('enableLocationBtn').addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      showToast('Location is not available on this device', 'error');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        locationBanner.classList.add('hidden');
+        search();
+      },
+      () => showToast('Could not access your location', 'error')
+    );
+  });
+
+  search();
+</script>
+
+</body>
+</html>

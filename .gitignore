@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Env files — never commit real secrets
+.env
+.env.local
+
+# AI model weights (downloaded at runtime, not committed)
+*.pt
+*.pth
+
+# Node (frontend, once it exists)
+node_modules/
+dist/
+build/
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

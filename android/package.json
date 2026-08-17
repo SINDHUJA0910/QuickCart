@@ -1,0 +1,23 @@
+{
+  "name": "quickcart-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capacitor Android wrapper for the QuickCart PWA (frontend/public). Ships the same HTML/CSS/JS as the web app -- no separate native codebase to maintain.",
+  "scripts": {
+    "sync": "cap sync android",
+    "open": "cap open android",
+    "build-apk": "cd android && ./gradlew assembleRelease",
+    "run": "cap run android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/camera": "^8.2.2",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0"
+  }
+}

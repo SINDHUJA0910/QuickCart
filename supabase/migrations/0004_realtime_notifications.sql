@@ -1,0 +1,22 @@
+-- =====================================================================
+-- QuickCart — Realtime notifications (Migration 0004)
+-- =====================================================================
+
+-- Enables Supabase Realtime (Postgres logical replication) on the
+-- notifications table. Once enabled, clients subscribe directly —
+-- no custom websocket server needed on the backend:
+--
+--   supabase
+--     .channel('notifications')
+--     .on('postgres_changes',
+--         { event: 'INSERT', schema: 'public', table: 'notifications',
+--           filter: `recipient_id=eq.${userId}` },
+--         (payload) => { /* show toast / update bell icon */ })
+--     .subscribe()
+--
+-- RLS on notifications (from migration 0001) already restricts each
+-- client to rows where recipient_id = auth.uid(), and that same policy
+-- governs what Realtime is allowed to push to a given client — a
+-- customer's subscription can never receive a retailer's notification
+-- rows, since Realtime enforces RLS per-connection just like normal reads.
+alter publication supabase_realtime add table notifications;

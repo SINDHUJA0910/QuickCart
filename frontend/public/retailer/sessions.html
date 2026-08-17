@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Live Sessions — QuickCart Retailer</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="retailer-shell">
+  <div class="retailer-topbar" id="retailerTopbar"></div>
+  <main class="retailer-main">
+    <div id="retailerTabs"></div>
+    <div id="content">
+      <div class="skeleton" style="height:200px; border-radius:14px;"></div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { api } from '../assets/js/api-client.js';
+  import { resolveCurrentStore } from '../assets/js/retailer-context.js';
+  import { renderRetailerShell } from '../assets/js/retailer-shell.js';
+
+  const content = document.getElementById('content');
+  let currentStoreId = null;
+  let refreshTimer = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  async function init() {
+    const { store, allStores } = await resolveCurrentStore();
+    if (!store) { window.location.href = './store-setup.html'; return; }
+    currentStoreId = store.id;
+    renderRetailerShell({ activeTab: 'sessions.html', store, allStores });
+
+    content.innerHTML = `
+      <div class="page-header-row">
+        <h1 class="page-title" style="font-size:30px;">Live sessions</h1>
+        <span class="section-label" style="margin:0;">Auto-refreshing every 10s</span>
+      </div>
+      <div class="table-wrap" id="sessionsTable"><div class="skeleton" style="height:160px;"></div></div>
+    `;
+
+    await renderSessions();
+    refreshTimer = setInterval(renderSessions, 10000);
+  }
+
+  async function renderSessions() {
+    const tableEl = document.getElementById('sessionsTable');
+    try {
+      const sessions = await api.getLiveSessions(currentStoreId);
+      if (sessions.length === 0) {
+        tableEl.innerHTML = `<div class="empty-state"><div class="icon">&#128694;</div><p>No customers currently shopping.</p></div>`;
+        return;
+      }
+      tableEl.innerHTML = `
+        <table class="data-table">
+          <thead><tr><th>Customer</th><th>Items scanned</th><th>Duration</th><th>Payment</th><th>Exit</th></tr></thead>
+          <tbody>
+            ${sessions.map(s => `
+              <tr>
+                <td>${escapeHtml(s.customer_name)}</td>
+                <td class="mono">${s.items_scanned}</td>
+                <td class="mono">${s.duration_minutes.toFixed(1)} min</td>
+                <td><span class="status-pill ${s.payment_status === 'success' ? 'active' : 'pending'}"><span class="dot"></span>${escapeHtml(s.payment_status)}</span></td>
+                <td>${escapeHtml(s.exit_status.replace('_', ' '))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    } catch (err) {
+      tableEl.innerHTML = `<div class="banner banner-error">Could not load live sessions.</div>`;
+    }
+  }
+
+  window.addEventListener('beforeunload', () => clearInterval(refreshTimer));
+
+  init();
+</script>
+
+</body>
+</html>

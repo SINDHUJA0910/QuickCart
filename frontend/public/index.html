@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QuickCart — Scan. Shop. Pay. Walk Out.</title>
+<meta name="description" content="QuickCart replaces checkout queues with barcode self-checkout and stops shrinkage with AI-powered CCTV monitoring — built for grocery, hypermarket and mini mart formats." />
+<style>
+  /* Self-hosted fonts — no third-party request, no FOUC, works offline.
+     Files sourced from the @fontsource npm packages (bebas-neue,
+     ibm-plex-sans, ibm-plex-mono), copied to assets/fonts/. */
+  @font-face { font-family: 'Bebas Neue'; src: url('assets/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'IBM Plex Sans'; src: url('assets/fonts/ibm-plex-sans-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'IBM Plex Sans'; src: url('assets/fonts/ibm-plex-sans-latin-500-normal.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'IBM Plex Sans'; src: url('assets/fonts/ibm-plex-sans-latin-600-normal.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'IBM Plex Sans'; src: url('assets/fonts/ibm-plex-sans-latin-700-normal.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; src: url('assets/fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; src: url('assets/fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'IBM Plex Mono'; src: url('assets/fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+</style>
+<style>
+  :root {
+    --paper: #FAFAF7;
+    --paper-raised: #FFFFFF;
+    --ink: #14231C;
+    --ink-soft: #445248;
+    --line: #D8D3C4;
+    --green: #2F6B4F;
+    --green-deep: #234F3B;
+    --green-tint: #E7F0EA;
+    --amber: #E8A23D;
+    --amber-deep: #C9821F;
+    --red: #C1443B;
+    --red-tint: #FBE9E7;
+    --radius-sm: 6px;
+    --radius-md: 14px;
+    --radius-lg: 28px;
+    --shadow-card: 0 1px 2px rgba(20,35,28,0.06), 0 8px 24px rgba(20,35,28,0.06);
+    --shadow-raised: 0 4px 10px rgba(20,35,28,0.10), 0 16px 40px rgba(20,35,28,0.10);
+    --nav-h: 76px;
+  }
+
+  [data-theme="dark"] {
+    --paper: #0E1712;
+    --paper-raised: #16221B;
+    --ink: #EAF3EC;
+    --ink-soft: #9CB3A6;
+    --line: #263A2E;
+    --green: #4CAE81;
+    --green-deep: #6FCB9F;
+    --green-tint: #16261E;
+    --amber: #F0B15A;
+    --amber-deep: #F5C784;
+    --red: #E36A60;
+    --red-tint: #2A1715;
+    --shadow-card: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    --shadow-raised: 0 4px 10px rgba(0,0,0,0.4), 0 16px 48px rgba(0,0,0,0.45);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.35s ease, color 0.35s ease;
+  }
+  h1, h2, h3, .display {
+    font-family: 'Bebas Neue', 'IBM Plex Sans', sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    line-height: 0.95;
+    margin: 0;
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  a { color: inherit; }
+  img, svg { display: block; max-width: 100%; }
+  .container { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 96px 0; }
+  @media (max-width: 720px) { section { padding: 64px 0; } }
+
+  ::selection { background: var(--amber); color: var(--ink); }
+  :focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+  }
+
+  /* ---------- NAV ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    height: var(--nav-h);
+    display: flex; align-items: center;
+    background: color-mix(in srgb, var(--paper) 78%, transparent);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav .container { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 0.03em; text-decoration: none; color: var(--ink); }
+  .logo-mark { width: 28px; height: 28px; border-radius: 6px; background: var(--green); position: relative; overflow: hidden; flex-shrink: 0; }
+  .logo-mark::before, .logo-mark::after { content: ""; position: absolute; top: 5px; bottom: 5px; width: 3px; background: var(--paper); }
+  .logo-mark::before { left: 8px; } .logo-mark::after { left: 15px; width: 5px; }
+  .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; margin: 0; padding: 0; font-size: 15px; font-weight: 500; }
+  .nav-links a { text-decoration: none; color: var(--ink-soft); transition: color 0.2s; }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-actions { display: flex; align-items: center; gap: 14px; }
+
+  .theme-toggle {
+    width: 52px; height: 30px; border-radius: 30px; border: 1px solid var(--line);
+    background: var(--paper-raised); position: relative; cursor: pointer; flex-shrink: 0;
+    padding: 0;
+  }
+  .theme-toggle::after {
+    content: "\2600"; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px;
+    border-radius: 50%; background: var(--amber); color: var(--paper);
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+    transition: transform 0.25s ease, background 0.25s ease; transform: translateX(0);
+  }
+  [data-theme="dark"] .theme-toggle::after { content: "\263E"; transform: translateX(22px); background: var(--green); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 22px; border-radius: var(--radius-sm); font-weight: 600; font-size: 15px;
+    text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-primary:hover { background: var(--green-deep); box-shadow: var(--shadow-raised); }
+  .btn-ghost { background: transparent; border-color: var(--line); color: var(--ink); }
+  .btn-ghost:hover { border-color: var(--ink-soft); }
+  .btn-sm { padding: 9px 16px; font-size: 14px; }
+
+  /* ---------- HERO ---------- */
+  .hero { padding: 76px 0 40px; position: relative; overflow: hidden; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; }
+  @media (max-width: 960px) { .hero-grid { grid-template-columns: 1fr; } }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--green-deep); background: var(--green-tint); border: 1px dashed var(--green);
+    padding: 6px 12px; border-radius: 999px; margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse-dot 1.8s ease-in-out infinite; }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .hero h1 { font-size: clamp(48px, 7vw, 84px); }
+  .hero h1 .line { display: block; }
+  .hero h1 .accent { color: var(--green); }
+  .hero p.lede { font-size: 19px; color: var(--ink-soft); max-width: 46ch; margin: 26px 0 34px; line-height: 1.55; }
+  .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 40px; }
+  .hero-trust { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--ink-soft); letter-spacing: 0.03em; }
+
+  /* ---------- SIGNATURE SCAN DEMO ---------- */
+  .scan-demo {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-raised); padding: 28px 24px 22px; position: relative;
+  }
+  .scan-demo-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 22px; }
+  .scan-demo-title { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+  .scan-demo-status { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--green); }
+  .scan-track {
+    position: relative; display: flex; justify-content: space-between; gap: 10px;
+    padding: 20px 8px 0; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line);
+  }
+  .scan-beam {
+    position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--amber);
+    box-shadow: 0 0 16px 3px var(--amber); left: 0%;
+    animation: sweep 5s cubic-bezier(.65,0,.35,1) infinite;
+  }
+  @keyframes sweep {
+    0%   { left: 2%; }
+    38%  { left: 98%; }
+    46%  { left: 98%; }
+    50%  { left: 98%; opacity: 0; }
+    52%  { left: 2%; opacity: 0; }
+    56%  { left: 2%; opacity: 1; }
+    100% { left: 2%; opacity: 1; }
+  }
+  .scan-item { flex: 1; text-align: center; padding-bottom: 22px; }
+  .scan-item-icon {
+    width: 46px; height: 46px; margin: 0 auto 10px; border-radius: 10px;
+    background: var(--paper); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
+    font-size: 22px; transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .scan-item-barcode { height: 10px; margin: 0 6px 8px; background-image: repeating-linear-gradient(90deg, var(--ink-soft) 0 1.5px, transparent 1.5px 4px); opacity: 0.5; }
+  .scan-item-tag { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); min-height: 15px; }
+  .scan-item.is-scanned .scan-item-icon { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint); }
+  .scan-item.is-scanned .scan-item-tag { color: var(--green); font-weight: 600; }
+  .scan-item.is-scanned .scan-item-tag::before { content: "\2713 "; }
+  .scan-item.is-alert .scan-item-icon { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-tint); animation: shake 0.4s ease; }
+  .scan-item.is-alert .scan-item-tag { color: var(--red); font-weight: 700; }
+  @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+  .scan-demo-footer { display: flex; justify-content: space-between; margin-top: 18px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+  .scan-demo-footer .alert-badge { color: var(--red); font-weight: 700; opacity: 0; transition: opacity 0.3s; }
+  .scan-demo-footer .alert-badge.show { opacity: 1; }
+
+  /* ---------- RECEIPT STAT STRIP ---------- */
+  .receipt-strip { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--paper-raised); }
+  .receipt-strip .container { display: flex; flex-wrap: wrap; gap: 0; padding: 0; }
+  .receipt-stat { flex: 1; min-width: 220px; padding: 28px 24px; border-right: 1px dashed var(--line); }
+  .receipt-stat:last-child { border-right: none; }
+  .receipt-stat .num { font-family: 'IBM Plex Mono', monospace; font-size: 30px; font-weight: 600; color: var(--green); }
+  .receipt-stat .lbl { font-size: 13.5px; color: var(--ink-soft); margin-top: 4px; }
+
+  /* ---------- SECTION HEADS ---------- */
+  .section-head { max-width: 640px; margin: 0 0 52px; }
+  .section-head .eyebrow { margin-bottom: 16px; }
+  .section-head h2 { font-size: clamp(32px, 4.2vw, 46px); }
+  .section-head p { color: var(--ink-soft); font-size: 16.5px; margin-top: 14px; line-height: 1.6; }
+  .center { text-align: center; margin-left: auto; margin-right: auto; }
+
+  /* ---------- HOW IT WORKS (receipt line items) ---------- */
+  .receipt {
+    max-width: 640px; margin: 0 auto; background: var(--paper-raised); border: 1px solid var(--line);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-card); overflow: hidden;
+  }
+  .receipt-row {
+    display: grid; grid-template-columns: 64px 1fr auto; gap: 18px; align-items: center;
+    padding: 22px 26px; border-bottom: 1px dashed var(--line);
+  }
+  .receipt-row:last-child { border-bottom: none; }
+  .receipt-row .step-no { font-family: 'Bebas Neue', sans-serif; font-size: 34px; color: var(--line); }
+  .receipt-row.active .step-no { color: var(--green); }
+  .receipt-row h3 { font-size: 20px; font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; letter-spacing: -0.01em; }
+  .receipt-row p { margin: 6px 0 0; color: var(--ink-soft); font-size: 14.5px; line-height: 1.5; }
+  .receipt-row .tick { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+
+  /* ---------- FEATURE TAGS ---------- */
+  .tag-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  @media (max-width: 860px) { .tag-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .tag-grid { grid-template-columns: 1fr; } }
+  .price-tag {
+    position: relative; background: var(--paper-raised); border: 1px solid var(--line);
+    border-radius: var(--radius-md); padding: 26px 22px 20px; box-shadow: var(--shadow-card);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .price-tag:hover { transform: translateY(-3px); box-shadow: var(--shadow-raised); }
+  .price-tag::before {
+    content: ""; position: absolute; top: -8px; left: 24px; width: 16px; height: 16px;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 50%;
+  }
+  .price-tag .icon { font-size: 26px; margin-bottom: 14px; }
+  .price-tag h3 { font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: 17.5px; margin-bottom: 8px; }
+  .price-tag p { font-size: 14.5px; color: var(--ink-soft); line-height: 1.55; margin: 0 0 16px; }
+  .price-tag .barcode { height: 12px; background-image: repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 5px); opacity: 0.18; }
+
+  /* ---------- SPLIT BENEFIT SECTIONS ---------- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; gap: 40px; } }
+  .split.reverse .split-visual { order: 2; }
+  @media (max-width: 900px) { .split.reverse .split-visual { order: 0; } }
+  .benefit-list { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+  .benefit-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 15.5px; line-height: 1.5; }
+  .benefit-list .check { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--green-tint); color: var(--green); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; margin-top: 1px; }
+
+  /* dashboard mock */
+  .mock-panel { background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-raised); overflow: hidden; }
+  .mock-titlebar { display: flex; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .mock-titlebar span { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+  .mock-body { padding: 20px; }
+  .mock-stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .mock-stat { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; }
+  .mock-stat .v { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 18px; }
+  .mock-stat .l { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+  .mock-bars { display: flex; align-items: flex-end; gap: 6px; height: 70px; margin-bottom: 16px; }
+  .mock-bars div { flex: 1; background: var(--green); border-radius: 3px 3px 0 0; opacity: 0.85; }
+  .mock-alert-row { display: flex; align-items: center; gap: 10px; background: var(--red-tint); border: 1px solid color-mix(in srgb, var(--red) 40%, transparent); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 12.5px; color: var(--red); font-family: 'IBM Plex Mono', monospace; }
+  .mock-alert-row .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: pulse-dot 1.4s infinite; }
+
+  /* phone mock */
+  .mock-phone { width: 260px; margin: 0 auto; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 32px; box-shadow: var(--shadow-raised); padding: 14px; }
+  .mock-phone-screen { background: var(--paper); border-radius: 20px; padding: 18px 16px; min-height: 380px; }
+  .mock-phone-header { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); display: flex; justify-content: space-between; margin-bottom: 14px; }
+  .mock-scan-frame { border: 2px dashed var(--green); border-radius: var(--radius-sm); height: 120px; display: flex; align-items: center; justify-content: center; font-size: 30px; margin-bottom: 16px; position: relative; overflow: hidden; }
+  .mock-scan-frame .beam-mini { position: absolute; left: 8px; right: 8px; height: 2px; background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: beam-mini 2.2s ease-in-out infinite; }
+  @keyframes beam-mini { 0%,100% { top: 10%; } 50% { top: 85%; } }
+  .mock-cart-line { display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .mock-cart-total { display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 700; padding-top: 10px; }
+
+  /* ---------- FAQ ---------- */
+  .faq-list { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  .faq-item { background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; }
+  .faq-q { width: 100%; text-align: left; background: none; border: none; padding: 20px 24px; font-size: 16px; font-weight: 600; font-family: 'IBM Plex Sans', sans-serif; color: var(--ink); cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .faq-q .plus { font-family: 'IBM Plex Mono', monospace; font-size: 20px; color: var(--green); transition: transform 0.25s ease; flex-shrink: 0; }
+  .faq-item.open .plus { transform: rotate(45deg); }
+  .faq-a { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  .faq-item.open .faq-a { max-height: 200px; }
+  .faq-a p { margin: 0 24px 20px; color: var(--ink-soft); font-size: 14.5px; line-height: 1.6; }
+
+  /* ---------- PRICING ---------- */
+  .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  @media (max-width: 860px) { .pricing-grid { grid-template-columns: 1fr; max-width: 380px; margin: 0 auto; } }
+  .price-card { background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 30px 26px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; }
+  .price-card.featured { border-color: var(--green); box-shadow: var(--shadow-raised); position: relative; }
+  .price-card.featured::before { content: "MOST CHOSEN"; position: absolute; top: -12px; left: 26px; background: var(--green); color: #fff; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 999px; }
+  .price-card h3 { font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: 17px; }
+  .price-card .fmt { font-size: 13px; color: var(--ink-soft); margin: 4px 0 18px; }
+  .price-card .amount { font-family: 'IBM Plex Mono', monospace; font-size: 34px; font-weight: 600; }
+  .price-card .amount span { font-size: 14px; color: var(--ink-soft); font-weight: 400; }
+  .price-card .note { font-size: 12px; color: var(--ink-soft); margin: 4px 0 20px; }
+  .price-card ul { list-style: none; padding: 0; margin: 0 0 24px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+  .price-card ul li::before { content: "\2014 "; color: var(--ink-soft); }
+  .price-card .btn { margin-top: auto; }
+
+  /* ---------- CONTACT ---------- */
+  .contact-panel { background: var(--green-deep); border-radius: var(--radius-lg); padding: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; color: #fff; }
+  [data-theme="dark"] .contact-panel { background: var(--green-tint); border: 1px solid var(--line); color: var(--ink); }
+  @media (max-width: 860px) { .contact-panel { grid-template-columns: 1fr; padding: 34px 24px; } }
+  .contact-panel h2 { font-size: clamp(30px, 4vw, 42px); margin-bottom: 14px; }
+  .contact-panel p { opacity: 0.85; line-height: 1.6; max-width: 40ch; }
+  .form-row { display: flex; flex-direction: column; gap: 14px; }
+  .form-row input, .form-row select {
+    padding: 13px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.08); color: #fff; font-family: 'IBM Plex Sans', sans-serif; font-size: 14.5px;
+  }
+  [data-theme="dark"] .form-row input, [data-theme="dark"] .form-row select { background: var(--paper-raised); border-color: var(--line); color: var(--ink); }
+  .form-row input::placeholder { color: rgba(255,255,255,0.6); }
+  [data-theme="dark"] .form-row input::placeholder { color: var(--ink-soft); }
+  .form-row .btn-primary { background: var(--amber); color: var(--ink); }
+  .form-row .btn-primary:hover { background: var(--amber-deep); }
+  .form-success { display: none; font-family: 'IBM Plex Mono', monospace; font-size: 14px; background: rgba(255,255,255,0.12); border-radius: var(--radius-sm); padding: 14px 16px; }
+  [data-theme="dark"] .form-success { background: var(--paper-raised); border: 1px solid var(--green); }
+  .form-success.show { display: block; }
+
+  /* ---------- FOOTER ---------- */
+  footer { border-top: 1px solid var(--line); padding: 48px 0 32px; }
+  .footer-grid { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 32px; margin-bottom: 40px; }
+  @media (max-width: 720px) { .footer-grid { grid-template-columns: repeat(2, 1fr); } }
+  .footer-col h4 { font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; font-weight: 500; margin-bottom: 14px; }
+  .footer-col ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; }
+  .footer-col a { text-decoration: none; color: var(--ink-soft); }
+  .footer-col a:hover { color: var(--ink); }
+  .footer-bottom { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 24px; border-top: 1px dashed var(--line); font-size: 13px; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; }
+
+  .reveal { opacity: 1; transform: translateY(0); }
+  .reveal.pre-reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .reveal.pre-reveal.in { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 780px) {
+    .nav-links { display: none; }
+  }
+  @media (max-width: 480px) {
+    .container { padding: 0 16px; }
+    .nav .container { gap: 10px; }
+    .nav-actions { gap: 8px; }
+    .nav-actions .btn-ghost { display: none; } /* "Sign in" drops on very narrow screens — "Request a demo" is the one CTA that must stay reachable */
+    .logo { font-size: 22px; }
+    .theme-toggle { width: 44px; height: 26px; }
+    .theme-toggle::after { width: 20px; height: 20px; }
+    [data-theme="dark"] .theme-toggle::after { transform: translateX(18px); }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container">
+    <a href="#top" class="logo"><span class="logo-mark" aria-hidden="true"></span>QuickCart</a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#retailers">For retailers</a></li>
+      <li><a href="#shoppers">For shoppers</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+    </ul>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode"></button>
+      <a href="#contact" class="btn btn-ghost btn-sm">Sign in</a>
+      <a href="#contact" class="btn btn-primary btn-sm">Request a demo</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow"><span class="dot"></span>AI-monitored checkout, live now</span>
+      <h1>
+        <span class="line">Scan.</span>
+        <span class="line">Shop.</span>
+        <span class="line">Pay.</span>
+        <span class="line accent">Walk out.</span>
+      </h1>
+      <p class="lede">QuickCart lets shoppers check themselves out with their phone — and lets you watch every aisle for what the scanner misses. No queues. No blind spots.</p>
+      <div class="hero-ctas">
+        <a href="#contact" class="btn btn-primary">Request a store demo</a>
+        <a href="#how-it-works" class="btn btn-ghost">See how it works</a>
+      </div>
+      <p class="hero-trust mono">BUILT FOR GROCERY · HYPERMARKET · MINI MART FORMATS</p>
+    </div>
+
+    <div class="scan-demo" role="img" aria-label="Animated demonstration: a scan beam passes over five products. Four are scanned and check in with a green price. One is picked up but never scanned, and is flagged red as a possible theft alert.">
+      <div class="scan-demo-header">
+        <span class="scan-demo-title mono">Live aisle feed — Cam 03</span>
+        <span class="scan-demo-status mono" id="scanStatus">MONITORING</span>
+      </div>
+      <div class="scan-track" id="scanTrack">
+        <div class="scan-beam"></div>
+        <div class="scan-item" data-scanned="true">
+          <div class="scan-item-icon">🍎</div>
+          <div class="scan-item-barcode"></div>
+          <div class="scan-item-tag mono">—</div>
+        </div>
+        <div class="scan-item" data-scanned="true">
+          <div class="scan-item-icon">🥖</div>
+          <div class="scan-item-barcode"></div>
+          <div class="scan-item-tag mono">—</div>
+        </div>
+        <div class="scan-item" data-scanned="false">
+          <div class="scan-item-icon">🧴</div>
+          <div class="scan-item-barcode"></div>
+          <div class="scan-item-tag mono">—</div>
+        </div>
+        <div class="scan-item" data-scanned="true">
+          <div class="scan-item-icon">🥛</div>
+          <div class="scan-item-barcode"></div>
+          <div class="scan-item-tag mono">—</div>
+        </div>
+        <div class="scan-item" data-scanned="true">
+          <div class="scan-item-icon">🥫</div>
+          <div class="scan-item-barcode"></div>
+          <div class="scan-item-tag mono">—</div>
+        </div>
+      </div>
+      <div class="scan-demo-footer">
+        <span>4 of 5 items scanned</span>
+        <span class="alert-badge mono" id="alertBadge">⚠ MISMATCH — RETAILER NOTIFIED</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="receipt-strip">
+  <div class="container">
+    <div class="receipt-stat"><div class="num mono">7 min</div><div class="lbl">average wait QuickCart removes from checkout</div></div>
+    <div class="receipt-stat"><div class="num mono">1.5%</div><div class="lbl">of grocery revenue lost to shrinkage industry-wide</div></div>
+    <div class="receipt-stat"><div class="num mono">24/7</div><div class="lbl">AI monitoring across every connected camera</div></div>
+    <div class="receipt-stat"><div class="num mono">&lt;1s</div><div class="lbl">to look up a product after a scan</div></div>
+  </div>
+</div>
+
+<section id="how-it-works">
+  <div class="container">
+    <div class="section-head center">
+      <span class="eyebrow">The whole trip</span>
+      <h2>Four steps. No lane.</h2>
+      <p>A shopper's whole visit, from the door to the parking lot, without ever standing behind another cart.</p>
+    </div>
+    <div class="receipt">
+      <div class="receipt-row active">
+        <span class="step-no mono">01</span>
+        <div><h3>Scan</h3><p>Point the in-app camera at a barcode. Price, stock, and expiry appear instantly — add it or skip it.</p></div>
+        <span class="tick mono">0.4s</span>
+      </div>
+      <div class="receipt-row">
+        <span class="step-no mono">02</span>
+        <div><h3>Shop</h3><p>The cart updates live as you move through the store. No basket to carry to a register later.</p></div>
+        <span class="tick mono">—</span>
+      </div>
+      <div class="receipt-row">
+        <span class="step-no mono">03</span>
+        <div><h3>Pay</h3><p>Review the bill, apply a coupon, and pay by UPI, card, or wallet — right where you're standing.</p></div>
+        <span class="tick mono">12s</span>
+      </div>
+      <div class="receipt-row">
+        <span class="step-no mono">04</span>
+        <div><h3>Walk out</h3><p>An encrypted QR pass appears. Show it at the door — it expires in 30 minutes and can't be reused.</p></div>
+        <span class="tick mono">✓</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="container">
+    <div class="section-head center">
+      <span class="eyebrow">Everything on one platform</span>
+      <h2>Built for both sides of the till</h2>
+      <p>One system for the shopper's phone and the retailer's back office — inventory, payments, and surveillance stay in sync automatically.</p>
+    </div>
+    <div class="tag-grid">
+      <div class="price-tag"><div class="icon">📷</div><h3>AI theft detection</h3><p>YOLOv8 and DeepSORT watch every connected camera and flag when what's picked up doesn't match what's scanned.</p><div class="barcode"></div></div>
+      <div class="price-tag"><div class="icon">📶</div><h3>Barcode self-checkout</h3><p>The back camera opens automatically. No extra taps between "pick up" and "in cart."</p><div class="barcode"></div></div>
+      <div class="price-tag"><div class="icon">🔐</div><h3>Encrypted exit pass</h3><p>A time-limited QR code — not a session ID — so a photographed pass can't be replayed at the door.</p><div class="barcode"></div></div>
+      <div class="price-tag"><div class="icon">📊</div><h3>Live retailer dashboard</h3><p>Today's sales, who's currently shopping, and open alerts — updated the moment they happen, not on a refresh.</p><div class="barcode"></div></div>
+      <div class="price-tag"><div class="icon">📦</div><h3>Real-time inventory</h3><p>Stock counts drop the instant an item is scanned, and low-stock alerts fire before a shelf actually empties.</p><div class="barcode"></div></div>
+      <div class="price-tag"><div class="icon">🧾</div><h3>Digital invoices</h3><p>A GST-itemized PDF generates automatically at checkout — searchable, downloadable, never lost in a bag.</p><div class="barcode"></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="retailers">
+  <div class="container split">
+    <div class="reveal">
+      <span class="eyebrow">For retailers</span>
+      <h2 style="font-size: clamp(28px, 3.6vw, 40px);">Run the floor without watching every aisle yourself</h2>
+      <ul class="benefit-list">
+        <li><span class="check">✓</span>Cut checkout lanes without cutting throughput — shoppers pay from wherever they're standing.</li>
+        <li><span class="check">✓</span>Catch mismatches between what's picked up and what's scanned, in real time, not on a monthly shrinkage report.</li>
+        <li><span class="check">✓</span>Manage stock, pricing, and supplier details from one inventory screen per store.</li>
+        <li><span class="check">✓</span>Export sales and traffic reports as CSV whenever you need them, no waiting on IT.</li>
+      </ul>
+      <a href="#contact" class="btn btn-primary" style="margin-top: 28px;">Request a store demo</a>
+    </div>
+    <div class="split-visual">
+      <div class="mock-panel">
+        <div class="mock-titlebar"><span></span><span></span><span></span></div>
+        <div class="mock-body">
+          <div class="mock-stat-row">
+            <div class="mock-stat"><div class="v mono">₹48,210</div><div class="l">Today's sales</div></div>
+            <div class="mock-stat"><div class="v mono">6</div><div class="l">In store now</div></div>
+            <div class="mock-stat"><div class="v mono">1</div><div class="l">Open alert</div></div>
+          </div>
+          <div class="mock-bars">
+            <div style="height:40%"></div><div style="height:65%"></div><div style="height:50%"></div>
+            <div style="height:85%"></div><div style="height:60%"></div><div style="height:95%"></div><div style="height:70%"></div>
+          </div>
+          <div class="mock-alert-row"><span class="pulse"></span> Cart–scan mismatch · Aisle 3 · Cam 03 · 2 min ago</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="shoppers" style="background: var(--paper-raised); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+  <div class="container split reverse">
+    <div class="split-visual">
+      <div class="mock-phone">
+        <div class="mock-phone-screen">
+          <div class="mock-phone-header"><span>Fresh Mart</span><span>04:12</span></div>
+          <div class="mock-scan-frame"><div class="beam-mini"></div>🥫</div>
+          <div class="mock-cart-line"><span>Basmati Rice 1kg</span><span>₹135</span></div>
+          <div class="mock-cart-line"><span>Toor Dal 500g</span><span>₹78</span></div>
+          <div class="mock-cart-line"><span>Milk 1L</span><span>₹58</span></div>
+          <div class="mock-cart-total"><span>Total</span><span>₹271</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="reveal">
+      <span class="eyebrow">For shoppers</span>
+      <h2 style="font-size: clamp(28px, 3.6vw, 40px);">Skip the line you never wanted to stand in</h2>
+      <ul class="benefit-list">
+        <li><span class="check">✓</span>Scan as you shop and watch the total update — no surprise at the register, because there isn't one.</li>
+        <li><span class="check">✓</span>Pay by UPI, card, or wallet the moment you're done, from wherever you're standing.</li>
+        <li><span class="check">✓</span>Get a digital invoice automatically — every purchase, searchable, no paper to keep.</li>
+        <li><span class="check">✓</span>Walk out on a QR pass that's yours alone, valid for 30 minutes and unusable if screenshotted twice.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="container">
+    <div class="section-head center">
+      <span class="eyebrow">Before you ask</span>
+      <h2>Questions retailers actually ask</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q">What cameras does the AI monitoring need? <span class="plus">+</span></button>
+        <div class="faq-a"><p>Any RTSP or HLS-capable IP camera you already run works — QuickCart connects to your existing feeds rather than requiring proprietary hardware.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Does this replace our POS system? <span class="plus">+</span></button>
+        <div class="faq-a"><p>No — QuickCart handles self-checkout, inventory, and monitoring alongside whatever POS you run at any staffed counters you keep.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What happens when the AI flags a false alarm? <span class="plus">+</span></button>
+        <div class="faq-a"><p>Every alert is reviewed by your staff before any action is taken — the dashboard lets you mark it resolved or false positive, and that feedback is kept for your own records.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">How long does setup take for one store? <span class="plus">+</span></button>
+        <div class="faq-a"><p>Typically one to two weeks: inventory import, camera zone configuration, and staff training on the exit-scan device.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing" style="background: var(--paper-raised); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+  <div class="container">
+    <div class="section-head center">
+      <span class="eyebrow">Pricing</span>
+      <h2>Priced by store, not by shopper</h2>
+      <p>Every plan includes barcode checkout, live inventory, and digital invoicing. AI monitoring scales with how many cameras you connect.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <h3>Mini Mart</h3>
+        <div class="fmt">1 store · up to 4 cameras</div>
+        <div class="amount mono">₹6,999<span>/mo</span></div>
+        <div class="note">Billed monthly, cancel anytime</div>
+        <ul><li>Barcode self-checkout</li><li>Live inventory</li><li>Digital invoicing</li><li>Email support</li></ul>
+        <a href="#contact" class="btn btn-ghost">Talk to sales</a>
+      </div>
+      <div class="price-card featured">
+        <h3>Grocery</h3>
+        <div class="fmt">1 store · up to 12 cameras</div>
+        <div class="amount mono">₹16,999<span>/mo</span></div>
+        <div class="note">Billed monthly, cancel anytime</div>
+        <ul><li>Everything in Mini Mart</li><li>AI theft detection</li><li>Live retailer dashboard</li><li>CSV & PDF reports</li><li>Priority support</li></ul>
+        <a href="#contact" class="btn btn-primary">Talk to sales</a>
+      </div>
+      <div class="price-card">
+        <h3>Hypermarket</h3>
+        <div class="fmt">Multi-store · unlimited cameras</div>
+        <div class="amount mono">Custom</div>
+        <div class="note">Volume pricing per store</div>
+        <ul><li>Everything in Grocery</li><li>Multi-store admin view</li><li>Dedicated onboarding</li><li>SLA-backed support</li></ul>
+        <a href="#contact" class="btn btn-ghost">Talk to sales</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="container">
+    <div class="contact-panel">
+      <div>
+        <h2>See it running on your own floor plan</h2>
+        <p>Tell us about your store and we'll set up a walkthrough — no commitment, just the dashboard and a camera feed.</p>
+      </div>
+      <div>
+        <form class="form-row" id="demoForm">
+          <input type="text" placeholder="Your name" required />
+          <input type="text" placeholder="Store name" required />
+          <input type="email" placeholder="Work email" required />
+          <select required>
+            <option value="" disabled selected>Store type</option>
+            <option>Mini mart</option>
+            <option>Grocery</option>
+            <option>Hypermarket</option>
+          </select>
+          <button type="submit" class="btn btn-primary">Request a demo</button>
+        </form>
+        <div class="form-success mono" id="formSuccess">✓ Request received. We'll email you within one business day to schedule a time.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <a href="#top" class="logo"><span class="logo-mark" aria-hidden="true"></span>QuickCart</a>
+        <p style="color: var(--ink-soft); font-size: 14px; margin-top: 14px; max-width: 32ch; line-height: 1.55;">Barcode self-checkout and AI-powered theft prevention for offline supermarkets.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul><li><a href="#features">Features</a></li><li><a href="#how-it-works">How it works</a></li><li><a href="#pricing">Pricing</a></li></ul>
+      </div>
+      <div class="footer-col">
+        <h4>Audience</h4>
+        <ul><li><a href="#retailers">For retailers</a></li><li><a href="#shoppers">For shoppers</a></li><li><a href="#faq">FAQ</a></li></ul>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <ul><li><a href="#contact">Contact</a></li><li><a href="#contact">Request a demo</a></li></ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 QuickCart. All rights reserved.</span>
+      <span>Scan. Shop. Pay. Walk out.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Theme toggle — persists across visits
+  const root = document.documentElement;
+  const themeToggle = document.getElementById('themeToggle');
+  const savedTheme = localStorage.getItem('quickcart-theme');
+  if (savedTheme) root.setAttribute('data-theme', savedTheme);
+  themeToggle.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('quickcart-theme', next);
+  });
+
+  // Scroll reveal — progressive enhancement only: elements are visible by
+  // default (see .reveal base rule), and JS *adds* the pre-reveal hidden
+  // state before animating them in. If this script fails or IntersectionObserver
+  // isn't supported, content simply stays visible rather than staying stuck
+  // invisible — visibility never depends on JS succeeding.
+  const revealEls = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window) {
+    revealEls.forEach(el => el.classList.add('pre-reveal'));
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+    }, { threshold: 0.1, rootMargin: '0px 0px -10% 0px' });
+    revealEls.forEach(el => io.observe(el));
+  }
+
+  // FAQ accordion
+  document.querySelectorAll('.faq-item').forEach(item => {
+    item.querySelector('.faq-q').addEventListener('click', () => {
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
+    });
+  });
+
+  // Demo form — no backend wired yet, shows a local confirmation only
+  document.getElementById('demoForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    document.getElementById('demoForm').style.display = 'none';
+    document.getElementById('formSuccess').classList.add('show');
+  });
+
+  // Scan demo tag reveal, synced loosely to the CSS beam animation
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const items = document.querySelectorAll('.scan-item');
+  const alertBadge = document.getElementById('alertBadge');
+  const scanStatus = document.getElementById('scanStatus');
+
+  function runScanCycle() {
+    items.forEach(item => item.classList.remove('is-scanned', 'is-alert'));
+    items.forEach(item => item.querySelector('.scan-item-tag').textContent = '—');
+    alertBadge.classList.remove('show');
+    scanStatus.textContent = 'MONITORING';
+
+    const prices = ['₹40', '₹35', '', '₹58', '₹90'];
+    items.forEach((item, i) => {
+      setTimeout(() => {
+        if (item.dataset.scanned === 'true') {
+          item.classList.add('is-scanned');
+          item.querySelector('.scan-item-tag').textContent = prices[i];
+        } else {
+          setTimeout(() => {
+            item.classList.add('is-alert');
+            item.querySelector('.scan-item-tag').textContent = 'NO SCAN';
+            alertBadge.classList.add('show');
+            scanStatus.textContent = 'ALERT';
+          }, 300);
+        }
+      }, i * 720);
+    });
+  }
+
+  if (prefersReducedMotion) {
+    items.forEach((item, i) => {
+      if (item.dataset.scanned === 'true') {
+        item.classList.add('is-scanned');
+        item.querySelector('.scan-item-tag').textContent = ['₹40','₹35','','₹58','₹90'][i];
+      } else {
+        item.classList.add('is-alert');
+        item.querySelector('.scan-item-tag').textContent = 'NO SCAN';
+      }
+    });
+    alertBadge.classList.add('show');
+    scanStatus.textContent = 'ALERT';
+  } else {
+    runScanCycle();
+    setInterval(runScanCycle, 5000);
+  }
+</script>
+
+</body>
+</html>

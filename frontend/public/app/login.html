@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Sign in — QuickCart</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="centered-shell">
+  <div style="width: 100%; max-width: 400px;">
+    <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 32px;">
+      <a href="../index.html" class="topbar-logo" style="display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--ink); font-family:'Bebas Neue',sans-serif; font-size:24px;">
+        <span class="logo-mark" aria-hidden="true"></span>QuickCart
+      </a>
+      <button class="theme-toggle" aria-label="Toggle dark mode"></button>
+    </div>
+
+    <span class="eyebrow" id="eyebrow">Welcome back</span>
+    <h1 class="page-title">Sign in</h1>
+    <p class="page-sub" id="pageSub">Scan, shop, and pay with your QuickCart account.</p>
+
+    <div class="role-toggle" role="tablist" aria-label="Account type">
+      <button type="button" class="active" data-role="customer" role="tab" aria-selected="true">Shopper</button>
+      <button type="button" data-role="retailer" role="tab" aria-selected="false">Retailer</button>
+    </div>
+
+    <div class="banner banner-error hidden" id="errorBanner" role="alert"></div>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" autocomplete="email" required />
+        <div class="field-error" id="emailError">Enter a valid email address.</div>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required />
+        <div class="field-error" id="passwordError">Enter your password.</div>
+      </div>
+      <div style="text-align:right; margin-bottom: 20px;">
+        <a href="./forgot-password.html" style="font-size: 13px; color: var(--ink-soft); text-decoration:none;">Forgot password?</a>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="submitBtn">Sign in</button>
+    </form>
+
+    <p class="form-footer-link">Don't have an account? <a href="./signup.html" id="signupLink">Sign up</a></p>
+  </div>
+</div>
+
+<script type="module">
+  import { api, ApiError, setSession } from '../assets/js/api-client.js';
+  import { initTheme, showToast, setButtonLoading } from '../assets/js/ui.js';
+
+  initTheme();
+
+  const roleButtons = document.querySelectorAll('.role-toggle button');
+  const eyebrow = document.getElementById('eyebrow');
+  const pageSub = document.getElementById('pageSub');
+  const signupLink = document.getElementById('signupLink');
+  let selectedRole = 'customer';
+
+  const copy = {
+    customer: { eyebrow: 'Welcome back', sub: 'Scan, shop, and pay with your QuickCart account.' },
+    retailer: { eyebrow: 'Retailer sign in', sub: 'Manage your store, inventory, and live sessions.' },
+  };
+
+  roleButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      roleButtons.forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      selectedRole = btn.dataset.role;
+      eyebrow.textContent = copy[selectedRole].eyebrow;
+      pageSub.textContent = copy[selectedRole].sub;
+      signupLink.href = selectedRole === 'retailer' ? './retailer-signup.html' : './signup.html';
+    });
+  });
+
+  const form = document.getElementById('loginForm');
+  const errorBanner = document.getElementById('errorBanner');
+  const submitBtn = document.getElementById('submitBtn');
+
+  function showFieldError(input, errorEl, show) {
+    input.classList.toggle('invalid', show);
+    errorEl.classList.toggle('show', show);
+  }
+
+  function validate() {
+    const email = document.getElementById('email');
+    const password = document.getElementById('password');
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value);
+    const passwordValid = password.value.length > 0;
+    showFieldError(email, document.getElementById('emailError'), !emailValid);
+    showFieldError(password, document.getElementById('passwordError'), !passwordValid);
+    return emailValid && passwordValid;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBanner.classList.add('hidden');
+    if (!validate()) return;
+
+    const payload = {
+      email: document.getElementById('email').value.trim(),
+      password: document.getElementById('password').value,
+    };
+
+    setButtonLoading(submitBtn, true, 'Signing in…');
+    try {
+      const loginFn = selectedRole === 'retailer' ? api.retailerLogin : api.customerLogin;
+      const result = await loginFn(payload);
+      setSession(result.token.access_token, result.role);
+      showToast('Signed in successfully', 'success');
+      window.location.href = selectedRole === 'retailer' ? '../retailer/dashboard.html' : './stores.html';
+    } catch (err) {
+      const message = err instanceof ApiError ? err.detail : 'Something went wrong. Please try again.';
+      errorBanner.textContent = message || 'Invalid email or password.';
+      errorBanner.classList.remove('hidden');
+    } finally {
+      setButtonLoading(submitBtn, false);
+    }
+  });
+</script>
+
+</body>
+</html>

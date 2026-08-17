@@ -1,0 +1,22 @@
+# Local development compose file. Supabase itself is NOT run locally here —
+# QuickCart uses Supabase Cloud (per the spec's "Official Cloud Database"
+# requirement), so this only runs the backend API against whatever
+# SUPABASE_URL/keys are in backend/.env. Use the Supabase CLI separately
+# (`supabase start`) if you want a fully local Postgres+Auth+Storage stack
+# for offline development — point .env at that instead.
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - APP_ENV=development
+    volumes:
+      # Mount source for live-reload in dev; remove this for a prod-like
+      # local test of the built image as-is.
+      - ./backend/app:/home/quickcart/app/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

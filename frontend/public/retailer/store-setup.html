@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Set up your store — QuickCart</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="centered-shell">
+  <div style="width: 100%; max-width: 460px;">
+    <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 32px;">
+      <a href="../index.html" style="display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--ink); font-family:'Bebas Neue',sans-serif; font-size:24px;">
+        <span class="logo-mark" aria-hidden="true"></span>QuickCart
+      </a>
+      <button class="theme-toggle" aria-label="Toggle dark mode"></button>
+    </div>
+
+    <span class="eyebrow">Store setup</span>
+    <h1 class="page-title">Set up your store</h1>
+    <p class="page-sub">This becomes your storefront for customer scanning and your dashboard's home base.</p>
+
+    <div class="banner banner-error hidden" id="errorBanner" role="alert"></div>
+
+    <form id="storeForm" novalidate>
+      <div class="field">
+        <label for="name">Store name</label>
+        <input type="text" id="name" required />
+      </div>
+      <div class="field">
+        <label for="storeType">Store type</label>
+        <select id="storeType" required>
+          <option value="grocery">Grocery</option>
+          <option value="hypermarket">Hypermarket</option>
+          <option value="mini_mart">Mini Mart</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="addressLine">Address</label>
+        <input type="text" id="addressLine" placeholder="Street address" />
+      </div>
+      <div class="form-grid-2">
+        <div class="field">
+          <label for="city">City</label>
+          <input type="text" id="city" />
+        </div>
+        <div class="field">
+          <label for="pincode">Pincode</label>
+          <input type="text" id="pincode" />
+        </div>
+      </div>
+      <div class="form-grid-2">
+        <div class="field">
+          <label for="openingTime">Opens</label>
+          <input type="time" id="openingTime" value="09:00" />
+        </div>
+        <div class="field">
+          <label for="closingTime">Closes</label>
+          <input type="time" id="closingTime" value="22:00" />
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="submitBtn" style="margin-top: 4px;">Create store</button>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+  import { api, ApiError, isLoggedIn } from '../assets/js/api-client.js';
+  import { setCurrentStoreId } from '../assets/js/retailer-context.js';
+  import { initTheme, setButtonLoading } from '../assets/js/ui.js';
+
+  initTheme();
+  if (!isLoggedIn()) window.location.href = '../app/login.html';
+
+  const form = document.getElementById('storeForm');
+  const errorBanner = document.getElementById('errorBanner');
+  const submitBtn = document.getElementById('submitBtn');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBanner.classList.add('hidden');
+
+    const name = document.getElementById('name').value.trim();
+    if (!name) {
+      errorBanner.textContent = 'Enter a store name.';
+      errorBanner.classList.remove('hidden');
+      return;
+    }
+
+    const payload = {
+      name,
+      store_type: document.getElementById('storeType').value,
+      address_line: document.getElementById('addressLine').value.trim() || null,
+      city: document.getElementById('city').value.trim() || null,
+      pincode: document.getElementById('pincode').value.trim() || null,
+      opening_time: document.getElementById('openingTime').value || null,
+      closing_time: document.getElementById('closingTime').value || null,
+    };
+
+    setButtonLoading(submitBtn, true, 'Creating store…');
+    try {
+      const store = await api.createStore(payload);
+      setCurrentStoreId(store.id);
+      window.location.href = './dashboard.html';
+    } catch (err) {
+      errorBanner.textContent = (err instanceof ApiError && err.detail) || 'Could not create your store.';
+      errorBanner.classList.remove('hidden');
+    } finally {
+      setButtonLoading(submitBtn, false);
+    }
+  });
+</script>
+
+</body>
+</html>

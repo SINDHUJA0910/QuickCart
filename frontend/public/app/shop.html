@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Shopping — QuickCart</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+<style>
+  .shop-topbar { display: flex; flex-direction: column; padding: 12px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--paper); z-index: 40; }
+  .shop-topbar-row { display: flex; justify-content: space-between; align-items: center; }
+  .store-name { font-family: 'Bebas Neue', sans-serif; font-size: 22px; }
+  .shop-timer { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
+
+  .scan-cta {
+    display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+    padding: 18px; border-radius: var(--radius-md); background: var(--green); color: #fff; border: none;
+    font-size: 16px; font-weight: 700; cursor: pointer; margin: 16px 0; box-shadow: var(--shadow-raised);
+  }
+  .scan-cta .icon { font-size: 20px; }
+  .manual-entry-toggle { text-align: center; font-size: 13px; color: var(--ink-soft); background: none; border: none; text-decoration: underline; cursor: pointer; width: 100%; padding: 4px; margin-bottom: 8px; }
+
+  .cart-summary-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px;
+    background: var(--paper-raised); border-top: 1px solid var(--line); box-shadow: var(--shadow-nav);
+    padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; z-index: 50;
+  }
+  .cart-summary-bar .count { font-size: 13px; color: var(--ink-soft); }
+  .cart-summary-bar .total { font-family: 'IBM Plex Mono', monospace; font-size: 19px; font-weight: 700; }
+  .cart-summary-bar .btn { width: auto; padding: 12px 22px; }
+
+  .cart-item-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px dashed var(--line); }
+  .cart-item-row:last-child { border-bottom: none; }
+  .cart-item-row .item-info { flex: 1; min-width: 0; }
+  .cart-item-row .item-name { font-weight: 600; font-size: 14.5px; }
+  .cart-item-row .item-price { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--ink-soft); }
+  .qty-stepper { display: flex; align-items: center; gap: 10px; }
+  .qty-stepper button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: var(--paper-raised); font-size: 16px; cursor: pointer; display:flex; align-items:center; justify-content:center; color: var(--ink); }
+  .qty-stepper .qty { font-family: 'IBM Plex Mono', monospace; font-size: 14px; min-width: 18px; text-align: center; }
+
+  .totals-row { display: flex; justify-content: space-between; font-size: 13.5px; padding: 5px 0; color: var(--ink-soft); }
+  .totals-row.grand { font-weight: 700; font-size: 16px; color: var(--ink); border-top: 1px solid var(--line); margin-top: 6px; padding-top: 12px; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(20,35,28,0.55); z-index: 100; display: none; align-items: flex-end; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal-sheet { width: 100%; max-width: 480px; background: var(--paper); border-radius: 24px 24px 0 0; padding: 20px; max-height: 88vh; overflow-y: auto; }
+  .modal-handle { width: 40px; height: 4px; background: var(--line); border-radius: 4px; margin: 0 auto 16px; }
+  .scan-video-wrap { position: relative; border-radius: var(--radius-md); overflow: hidden; background: #000; aspect-ratio: 4/3; margin-bottom: 14px; }
+  .scan-video-wrap video { width: 100%; height: 100%; object-fit: cover; }
+  .scan-frame-overlay { position: absolute; inset: 15%; border: 3px solid var(--amber); border-radius: 12px; box-shadow: 0 0 0 999px rgba(0,0,0,0.35); }
+  .scan-status-text { text-align: center; font-size: 13px; color: var(--ink-soft); margin-bottom: 4px; }
+
+  .product-card-hero { display: flex; gap: 14px; margin-bottom: 16px; }
+  .product-card-hero .thumb { width: 84px; height: 84px; border-radius: var(--radius-sm); background: var(--green-tint); display: flex; align-items: center; justify-content: center; font-size: 34px; flex-shrink: 0; }
+  .price-row { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 2px; }
+  .price-row .current { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; }
+  .price-row .mrp { font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--ink-faint); text-decoration: line-through; }
+  .price-row .discount-badge { background: var(--amber-tint); color: var(--amber-deep); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
+  .stock-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+  .stock-pill.in { background: var(--green-tint); color: var(--green-deep); }
+  .stock-pill.out { background: var(--red-tint); color: var(--red); }
+  .modal-qty-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; margin: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-actions .btn { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="shop-topbar">
+    <div class="shop-topbar-row">
+      <div>
+        <div class="store-name" id="storeName">Loading…</div>
+        <div class="shop-timer mono" id="shopTimer">00:00</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="theme-toggle" aria-label="Toggle dark mode"></button>
+        <button class="icon-btn" id="exitBtn" aria-label="Leave without checking out" title="Leave">&#10005;</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="app-main no-bottom-nav" style="padding-bottom: 100px;">
+    <div class="banner banner-error hidden" id="errorBanner" role="alert"></div>
+
+    <button class="scan-cta" id="openScanBtn">
+      <span class="icon">&#128247;</span> Scan a product
+    </button>
+    <button class="manual-entry-toggle" id="manualEntryBtn">or enter a barcode manually</button>
+
+    <div class="section-label">Your cart</div>
+    <div id="cartList"></div>
+    <div id="cartTotals"></div>
+  </main>
+
+  <div class="cart-summary-bar" id="cartSummaryBar" style="display:none;">
+    <div>
+      <div class="count" id="cartCount">0 items</div>
+      <div class="total mono" id="cartTotal">₹0.00</div>
+    </div>
+    <button class="btn btn-primary" id="checkoutBtn">Checkout</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="scanModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div id="scanCameraView">
+      <div class="scan-video-wrap">
+        <video id="scanVideo" playsinline muted autoplay></video>
+        <div class="scan-frame-overlay"></div>
+      </div>
+      <p class="scan-status-text" id="scanStatusText">Point your camera at a barcode</p>
+    </div>
+    <div id="manualEntryView" style="display:none;">
+      <div class="field">
+        <label for="manualBarcode">Barcode number</label>
+        <input type="text" id="manualBarcode" inputmode="numeric" placeholder="e.g. 8901030123456" />
+      </div>
+      <button class="btn btn-primary btn-block" id="manualLookupBtn">Look up product</button>
+    </div>
+    <button class="btn btn-ghost btn-block" id="closeScanBtn" style="margin-top: 10px;">Cancel</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="productModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div id="productModalBody"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-library/0.20.0/index.min.js"></script>
+<script type="module">
+  import { api, ApiError, isLoggedIn } from '../assets/js/api-client.js';
+  import { initTheme, showToast, formatMoney } from '../assets/js/ui.js';
+
+  initTheme();
+  if (!isLoggedIn()) window.location.href = './login.html';
+
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session');
+  if (!sessionId) window.location.href = './stores.html';
+
+  const errorBanner = document.getElementById('errorBanner');
+  const cartList = document.getElementById('cartList');
+  const cartTotals = document.getElementById('cartTotals');
+  const cartSummaryBar = document.getElementById('cartSummaryBar');
+  let entryTime = null;
+  let timerInterval = null;
+  let cachedStoreId = null;
+
+  function showError(message) {
+    errorBanner.textContent = message;
+    errorBanner.classList.remove('hidden');
+    setTimeout(() => errorBanner.classList.add('hidden'), 4000);
+  }
+
+  async function loadSession() {
+    try {
+      const session = await api.getActiveSession();
+      document.getElementById('storeName').textContent = session.store_name;
+      cachedStoreId = session.store_id;
+      entryTime = new Date(session.entry_time);
+      updateTimer();
+      timerInterval = setInterval(updateTimer, 1000);
+    } catch (err) {
+      showError('Could not load your shopping session.');
+    }
+  }
+  function updateTimer() {
+    const elapsed = Math.max(0, Math.floor((Date.now() - entryTime.getTime()) / 1000));
+    const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const s = String(elapsed % 60).padStart(2, '0');
+    document.getElementById('shopTimer').textContent = `${m}:${s}`;
+  }
+
+  async function refreshCart() {
+    try {
+      const cart = await api.getCart(sessionId);
+      renderCart(cart);
+    } catch (err) {
+      showError('Could not load your cart.');
+    }
+  }
+
+  function renderCart(cart) {
+    if (cart.items.length === 0) {
+      cartList.innerHTML = `<div class="empty-state"><div class="icon">&#128722;</div><p>Nothing scanned yet.<br>Scan your first item to get started.</p></div>`;
+      cartTotals.innerHTML = '';
+      cartSummaryBar.style.display = 'none';
+      return;
+    }
+
+    cartList.innerHTML = `<div class="card card-pad">` + cart.items.map(item => `
+      <div class="cart-item-row" data-item-id="${item.id}">
+        <div class="item-info">
+          <div class="item-name">${escapeHtml(item.product_name)}</div>
+          <div class="item-price">${formatMoney(item.unit_price_paise)} each</div>
+        </div>
+        <div class="qty-stepper">
+          <button class="qty-dec" aria-label="Decrease quantity">&#8722;</button>
+          <span class="qty">${item.quantity}</span>
+          <button class="qty-inc" aria-label="Increase quantity">&#43;</button>
+        </div>
+      </div>
+    `).join('') + `</div>`;
+
+    cartTotals.innerHTML = `
+      <div class="card card-pad" style="margin-top: 14px;">
+        <div class="totals-row"><span>Subtotal</span><span class="mono">${formatMoney(cart.subtotal_paise)}</span></div>
+        <div class="totals-row"><span>Discount</span><span class="mono">-${formatMoney(cart.discount_paise)}</span></div>
+        <div class="totals-row"><span>GST</span><span class="mono">${formatMoney(cart.gst_paise)}</span></div>
+        <div class="totals-row grand"><span>Total</span><span class="mono">${formatMoney(cart.total_paise)}</span></div>
+      </div>`;
+
+    cartSummaryBar.style.display = 'flex';
+    document.getElementById('cartCount').textContent = `${cart.item_count} item${cart.item_count === 1 ? '' : 's'}`;
+    document.getElementById('cartTotal').textContent = formatMoney(cart.total_paise);
+
+    cartList.querySelectorAll('.cart-item-row').forEach(row => {
+      const itemId = row.dataset.itemId;
+      const item = cart.items.find(i => i.id === itemId);
+      row.querySelector('.qty-inc').addEventListener('click', () => updateQty(itemId, item.quantity + 1));
+      row.querySelector('.qty-dec').addEventListener('click', () => {
+        if (item.quantity <= 1) { removeItem(itemId); } else { updateQty(itemId, item.quantity - 1); }
+      });
+    });
+  }
+
+  async function updateQty(itemId, newQty) {
+    try {
+      const cart = await api.updateCartItem(sessionId, itemId, newQty);
+      renderCart(cart);
+    } catch (err) {
+      showError((err instanceof ApiError && err.detail) || 'Could not update quantity.');
+    }
+  }
+  async function removeItem(itemId) {
+    try {
+      const cart = await api.removeCartItem(sessionId, itemId);
+      renderCart(cart);
+      showToast('Item removed');
+    } catch (err) {
+      showError('Could not remove item.');
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  const scanModal = document.getElementById('scanModal');
+  const scanCameraView = document.getElementById('scanCameraView');
+  const manualEntryView = document.getElementById('manualEntryView');
+  const scanVideo = document.getElementById('scanVideo');
+  const scanStatusText = document.getElementById('scanStatusText');
+  let mediaStream = null;
+  let detectionLoopId = null;
+  let barcodeDetector = null;
+  let zxingReader = null;
+
+  async function openScan(manual = false) {
+    scanModal.classList.add('show');
+    if (manual) {
+      scanCameraView.style.display = 'none';
+      manualEntryView.style.display = 'block';
+      document.getElementById('manualBarcode').focus();
+      return;
+    }
+    scanCameraView.style.display = 'block';
+    manualEntryView.style.display = 'none';
+    await startCamera();
+  }
+
+  function closeScan() {
+    scanModal.classList.remove('show');
+    stopCamera();
+  }
+
+  async function startCamera() {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      scanVideo.srcObject = mediaStream;
+      await scanVideo.play();
+
+      if ('BarcodeDetector' in window) {
+        barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] });
+        detectionLoopId = requestAnimationFrame(detectLoopNative);
+      } else if (window.ZXingBrowser || window.ZXing) {
+        scanStatusText.textContent = 'Point your camera at a barcode';
+        startZXingFallback();
+      } else {
+        scanStatusText.textContent = 'Live scanning is not supported on this browser — use manual entry below.';
+      }
+    } catch (err) {
+      scanStatusText.textContent = 'Camera access was denied. Use manual entry instead.';
+    }
+  }
+
+  function stopCamera() {
+    if (detectionLoopId) cancelAnimationFrame(detectionLoopId);
+    if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+    if (zxingReader) { try { zxingReader.reset(); } catch {} zxingReader = null; }
+  }
+
+  async function detectLoopNative() {
+    if (!mediaStream) return;
+    try {
+      const barcodes = await barcodeDetector.detect(scanVideo);
+      if (barcodes.length > 0) {
+        handleBarcodeDetected(barcodes[0].rawValue);
+        return;
+      }
+    } catch {}
+    detectionLoopId = requestAnimationFrame(detectLoopNative);
+  }
+
+  function startZXingFallback() {
+    try {
+      const ZXingLib = window.ZXingBrowser || window.ZXing;
+      zxingReader = new ZXingLib.BrowserMultiFormatReader();
+      zxingReader.decodeFromVideoElement(scanVideo, (result) => {
+        if (result) handleBarcodeDetected(result.getText());
+      });
+    } catch {
+      scanStatusText.textContent = 'Live scanning is not supported on this browser — use manual entry below.';
+    }
+  }
+
+  let lookupInFlight = false;
+  async function handleBarcodeDetected(barcode) {
+    if (lookupInFlight) return;
+    lookupInFlight = true;
+    stopCamera();
+    await lookupProduct(barcode);
+    lookupInFlight = false;
+  }
+
+  document.getElementById('openScanBtn').addEventListener('click', () => openScan(false));
+  document.getElementById('manualEntryBtn').addEventListener('click', () => openScan(true));
+  document.getElementById('closeScanBtn').addEventListener('click', closeScan);
+  document.getElementById('manualLookupBtn').addEventListener('click', () => {
+    const code = document.getElementById('manualBarcode').value.trim();
+    if (code) lookupProduct(code);
+  });
+
+  const productModal = document.getElementById('productModal');
+  const productModalBody = document.getElementById('productModalBody');
+  let currentProduct = null;
+  let modalQty = 1;
+
+  async function lookupProduct(barcode) {
+    try {
+      const product = await api.getProductByBarcode(cachedStoreId, barcode);
+      currentProduct = product;
+      modalQty = 1;
+      closeScan();
+      renderProductModal();
+    } catch (err) {
+      closeScan();
+      showError((err instanceof ApiError && err.status === 404) ? "That barcode isn't recognized at this store." : 'Could not look up that product.');
+    }
+  }
+
+  function renderProductModal() {
+    const p = currentProduct;
+    const inStock = p.in_stock;
+    productModalBody.innerHTML = `
+      <div class="product-card-hero">
+        <div class="thumb">&#128230;</div>
+        <div>
+          <div style="font-weight:700; font-size:16.5px;">${escapeHtml(p.name)}</div>
+          <div style="font-size:13px; color:var(--ink-soft);">${escapeHtml(p.brand || '')}</div>
+          <div class="price-row">
+            <span class="current mono">${formatMoney(p.price_paise)}</span>
+            ${p.discount_percent > 0 ? `<span class="mrp mono">${formatMoney(p.mrp_paise)}</span><span class="discount-badge">${p.discount_percent}% OFF</span>` : ''}
+          </div>
+          <span class="stock-pill ${inStock ? 'in' : 'out'}">${inStock ? `In stock — ${p.stock_quantity} left` : 'Out of stock'}</span>
+        </div>
+      </div>
+      ${p.description ? `<p style="font-size:13.5px; color:var(--ink-soft); line-height:1.5;">${escapeHtml(p.description)}</p>` : ''}
+      <div class="modal-qty-row">
+        <span style="font-weight:600; font-size:14px;">Quantity</span>
+        <div class="qty-stepper">
+          <button id="modalQtyDec" aria-label="Decrease quantity">&#8722;</button>
+          <span class="qty" id="modalQtyValue">1</span>
+          <button id="modalQtyInc" aria-label="Increase quantity">&#43;</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="cancelAddBtn">Cancel</button>
+        <button class="btn btn-primary" id="confirmAddBtn" ${!inStock ? 'disabled' : ''}>Add to cart</button>
+      </div>
+    `;
+    productModal.classList.add('show');
+
+    document.getElementById('modalQtyInc').addEventListener('click', () => {
+      modalQty = Math.min(modalQty + 1, p.stock_quantity);
+      document.getElementById('modalQtyValue').textContent = modalQty;
+    });
+    document.getElementById('modalQtyDec').addEventListener('click', () => {
+      modalQty = Math.max(1, modalQty - 1);
+      document.getElementById('modalQtyValue').textContent = modalQty;
+    });
+    document.getElementById('cancelAddBtn').addEventListener('click', () => productModal.classList.remove('show'));
+    document.getElementById('confirmAddBtn').addEventListener('click', confirmAddToCart);
+  }
+
+  async function confirmAddToCart() {
+    try {
+      const cart = await api.addCartItem(sessionId, currentProduct.id, modalQty);
+      renderCart(cart);
+      productModal.classList.remove('show');
+      showToast(`${currentProduct.name} added to cart`, 'success');
+    } catch (err) {
+      showError((err instanceof ApiError && err.detail) || 'Could not add this item to your cart.');
+    }
+  }
+
+  document.getElementById('checkoutBtn').addEventListener('click', () => {
+    window.location.href = `./checkout.html?session=${sessionId}`;
+  });
+
+  document.getElementById('exitBtn').addEventListener('click', () => {
+    if (confirm('Leave without checking out? Your cart will be saved.')) {
+      window.location.href = './stores.html';
+    }
+  });
+
+  (async function init() {
+    await loadSession();
+    await refreshCart();
+  })();
+</script>
+
+</body>
+</html>

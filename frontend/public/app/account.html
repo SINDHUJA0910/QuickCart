@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Account — QuickCart</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+<style>
+  .avatar-circle { width: 64px; height: 64px; border-radius: 50%; background: var(--green-tint); color: var(--green-deep); display: flex; align-items: center; justify-content: center; font-family: 'Bebas Neue', sans-serif; font-size: 28px; margin-bottom: 12px; }
+  .account-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px dashed var(--line); font-size: 14.5px; }
+  .account-row:last-child { border-bottom: none; }
+  .account-row .label { color: var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="topbar">
+    <span class="topbar-title">Account</span>
+    <button class="theme-toggle" aria-label="Toggle dark mode"></button>
+  </div>
+
+  <main class="app-main" id="mainContent">
+    <div class="skeleton" style="width:64px;height:64px;border-radius:50%;margin-bottom:16px;"></div>
+    <div class="skeleton" style="width:60%;height:16px;margin-bottom:8px;"></div>
+    <div class="skeleton" style="width:40%;height:12px;"></div>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="./stores.html"><span class="nav-icon">&#127978;</span>Stores</a>
+    <a href="./notifications.html"><span class="nav-icon">&#128276;</span>Alerts</a>
+    <a href="./account.html" class="active"><span class="nav-icon">&#128100;</span>Account</a>
+  </nav>
+</div>
+
+<script type="module">
+  import { api, isLoggedIn, clearSession } from '../assets/js/api-client.js';
+  import { initTheme } from '../assets/js/ui.js';
+
+  initTheme();
+  if (!isLoggedIn()) window.location.href = './login.html';
+
+  const mainContent = document.getElementById('mainContent');
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function load() {
+    try {
+      const profile = await api.customerMe();
+      const initial = (profile.full_name || '?').charAt(0).toUpperCase();
+      mainContent.innerHTML = `
+        <div class="avatar-circle">${initial}</div>
+        <h1 class="page-title" style="font-size: 26px;">${escapeHtml(profile.full_name)}</h1>
+        <p class="page-sub">${escapeHtml(profile.email || '')}</p>
+
+        <div class="card card-pad">
+          <div class="account-row"><span class="label">Full name</span><span>${escapeHtml(profile.full_name)}</span></div>
+          <div class="account-row"><span class="label">Phone</span><span>${escapeHtml(profile.phone || '—')}</span></div>
+        </div>
+
+        <button class="btn btn-ghost btn-block" id="logoutBtn" style="margin-top: 20px;">Sign out</button>
+      `;
+      document.getElementById('logoutBtn').addEventListener('click', () => {
+        clearSession();
+        window.location.href = './login.html';
+      });
+    } catch (err) {
+      mainContent.innerHTML = `<div class="banner banner-error">Could not load your account. <a href="./login.html">Sign in again</a>.</div>`;
+    }
+  }
+
+  load();
+</script>
+
+</body>
+</html>

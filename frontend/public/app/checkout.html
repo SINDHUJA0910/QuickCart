@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Checkout — QuickCart</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+<style>
+  .qr-wrap { text-align: center; padding: 24px 0; }
+  .qr-wrap img { width: 200px; height: 200px; margin: 0 auto 16px; border-radius: var(--radius-md); border: 1px solid var(--line); background: #fff; padding: 10px; }
+  .qr-expiry { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--ink-soft); }
+  .success-icon { width: 56px; height: 56px; border-radius: 50%; background: var(--green-tint); color: var(--green); display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 16px; }
+  .invoice-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+  .invoice-row:last-child { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="topbar">
+    <button class="back-btn" id="backBtn">&#8592; Back to cart</button>
+    <button class="theme-toggle" aria-label="Toggle dark mode"></button>
+  </div>
+
+  <main class="app-main no-bottom-nav" id="mainContent">
+    <span class="eyebrow">Step 3 of 4</span>
+    <h1 class="page-title" style="font-size: 28px; margin-top: 10px;">Review &amp; pay</h1>
+
+    <div class="banner banner-error hidden" id="errorBanner" role="alert"></div>
+
+    <div id="billCard"></div>
+
+    <button class="btn btn-primary btn-block" id="payBtn" style="margin-top: 20px;">Pay now</button>
+  </main>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script type="module">
+  import { api, ApiError, isLoggedIn } from '../assets/js/api-client.js';
+  import { initTheme, showToast, formatMoney, setButtonLoading } from '../assets/js/ui.js';
+
+  initTheme();
+  if (!isLoggedIn()) window.location.href = './login.html';
+
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session');
+  if (!sessionId) window.location.href = './stores.html';
+
+  const errorBanner = document.getElementById('errorBanner');
+  const billCard = document.getElementById('billCard');
+  const payBtn = document.getElementById('payBtn');
+  const mainContent = document.getElementById('mainContent');
+
+  document.getElementById('backBtn').addEventListener('click', () => {
+    window.location.href = `./shop.html?session=${sessionId}`;
+  });
+
+  function showError(message) {
+    errorBanner.textContent = message;
+    errorBanner.classList.remove('hidden');
+  }
+
+  async function loadBill() {
+    try {
+      const cart = await api.getCart(sessionId);
+      if (cart.items.length === 0) {
+        window.location.href = `./shop.html?session=${sessionId}`;
+        return;
+      }
+      billCard.innerHTML = `
+        <div class="card card-pad">
+          <div class="section-label">Order summary</div>
+          ${cart.items.map(item => `
+            <div class="invoice-row">
+              <span>${escapeHtml(item.product_name)} × ${item.quantity}</span>
+              <span class="mono">${formatMoney(item.line_total_paise)}</span>
+            </div>
+          `).join('')}
+          <div class="invoice-row"><span>Subtotal</span><span class="mono">${formatMoney(cart.subtotal_paise)}</span></div>
+          <div class="invoice-row"><span>Discount</span><span class="mono">-${formatMoney(cart.discount_paise)}</span></div>
+          <div class="invoice-row"><span>GST</span><span class="mono">${formatMoney(cart.gst_paise)}</span></div>
+          <div class="invoice-row" style="font-weight:700; font-size:17px;"><span>Total</span><span class="mono">${formatMoney(cart.total_paise)}</span></div>
+        </div>`;
+      payBtn.textContent = `Pay ${formatMoney(cart.total_paise)}`;
+    } catch (err) {
+      showError('Could not load your bill.');
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  payBtn.addEventListener('click', async () => {
+    errorBanner.classList.add('hidden');
+    setButtonLoading(payBtn, true, 'Starting payment…');
+    try {
+      const order = await api.startCheckout(sessionId);
+
+      if (typeof Razorpay === 'undefined') {
+        showError('Payment could not load. Check your connection and try again.');
+        setButtonLoading(payBtn, false);
+        return;
+      }
+
+      const rzp = new Razorpay({
+        key: order.razorpay_key_id,
+        amount: order.amount_paise,
+        currency: order.currency,
+        order_id: order.razorpay_order_id,
+        name: 'QuickCart',
+        description: 'Grocery checkout',
+        theme: { color: '#2F6B4F' },
+        handler: async function (response) {
+          await confirmPayment({
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          });
+        },
+        modal: {
+          ondismiss: function () { setButtonLoading(payBtn, false); },
+        },
+      });
+      rzp.on('payment.failed', function () {
+        showError('Payment failed. Please try again.');
+        setButtonLoading(payBtn, false);
+      });
+      rzp.open();
+    } catch (err) {
+      showError((err instanceof ApiError && err.detail) || 'Could not start checkout.');
+      setButtonLoading(payBtn, false);
+    }
+  });
+
+  async function confirmPayment(payload) {
+    try {
+      const result = await api.confirmCheckout(sessionId, payload);
+      renderSuccess(result);
+    } catch (err) {
+      showError((err instanceof ApiError && err.detail) || 'Payment could not be verified. Please contact support.');
+      setButtonLoading(payBtn, false);
+    }
+  }
+
+  function renderSuccess(result) {
+    mainContent.innerHTML = `
+      <div class="success-icon">&#10003;</div>
+      <h1 class="page-title" style="text-align:center; font-size: 30px;">Payment successful</h1>
+      <p class="page-sub" style="text-align:center;">Invoice ${escapeHtml(result.invoice.invoice_number)}</p>
+
+      <div class="card card-pad qr-wrap">
+        <img src="data:image/png;base64,${result.qr_code_image_base64}" alt="Exit QR pass" />
+        <div class="section-label" style="margin-bottom:4px;">Show this at the exit</div>
+        <div class="qr-expiry">Valid until ${new Date(result.qr_pass_expires_at).toLocaleTimeString()}</div>
+      </div>
+
+      <div class="card card-pad" style="margin-top: 16px;">
+        <div class="invoice-row"><span>Subtotal</span><span class="mono">${formatMoney(result.invoice.subtotal_paise)}</span></div>
+        <div class="invoice-row"><span>Discount</span><span class="mono">-${formatMoney(result.invoice.discount_paise)}</span></div>
+        <div class="invoice-row"><span>GST</span><span class="mono">${formatMoney(result.invoice.gst_paise)}</span></div>
+        <div class="invoice-row" style="font-weight:700;"><span>Total paid</span><span class="mono">${formatMoney(result.invoice.total_paise)}</span></div>
+      </div>
+
+      <a href="./stores.html" class="btn btn-primary btn-block" style="margin-top: 20px;">Done</a>
+    `;
+  }
+
+  loadBill();
+</script>
+
+</body>
+</html>

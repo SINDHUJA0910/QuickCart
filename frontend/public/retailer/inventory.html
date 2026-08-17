@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inventory — QuickCart Retailer</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+<style>
+  .low-stock-toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 500; cursor: pointer; user-select: none; }
+  .low-stock-toggle input { width: 16px; height: 16px; accent-color: var(--green); }
+  .product-name-cell { display: flex; align-items: center; gap: 8px; }
+  .low-stock-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+  .row-actions { display: flex; gap: 6px; }
+  .row-actions button { padding: 5px 10px; font-size: 12px; border-radius: 5px; border: 1px solid var(--line); background: var(--paper-raised); cursor: pointer; color: var(--ink); }
+  .row-actions button.delete { color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="retailer-shell">
+  <div class="retailer-topbar" id="retailerTopbar"></div>
+  <main class="retailer-main">
+    <div id="retailerTabs"></div>
+    <div id="content">
+      <div class="skeleton" style="height:200px; border-radius:14px;"></div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay-center" id="productModal">
+  <div class="modal-panel">
+    <h2 class="page-title" style="font-size: 22px; margin-bottom: 16px;" id="modalTitle">Add product</h2>
+    <div class="banner banner-error hidden" id="modalError"></div>
+    <form id="productForm">
+      <div class="field">
+        <label for="pName">Name</label>
+        <input type="text" id="pName" required />
+      </div>
+      <div class="form-grid-2">
+        <div class="field">
+          <label for="pBrand">Brand</label>
+          <input type="text" id="pBrand" />
+        </div>
+        <div class="field">
+          <label for="pBarcode">Barcode <span style="color:var(--ink-faint); font-weight:400;">(auto if blank)</span></label>
+          <input type="text" id="pBarcode" />
+        </div>
+      </div>
+      <div class="form-grid-2">
+        <div class="field">
+          <label for="pMrp">MRP (₹)</label>
+          <input type="number" id="pMrp" step="0.01" min="0" required />
+        </div>
+        <div class="field">
+          <label for="pDiscount">Discount %</label>
+          <input type="number" id="pDiscount" step="0.1" min="0" max="100" value="0" />
+        </div>
+      </div>
+      <div class="form-grid-2">
+        <div class="field">
+          <label for="pStock">Stock quantity</label>
+          <input type="number" id="pStock" min="0" required />
+        </div>
+        <div class="field">
+          <label for="pThreshold">Low stock at</label>
+          <input type="number" id="pThreshold" min="0" value="5" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="pGst">GST %</label>
+        <input type="number" id="pGst" step="0.1" min="0" max="100" value="0" />
+      </div>
+      <div style="display:flex; gap:10px; margin-top: 6px;">
+        <button type="button" class="btn btn-ghost" id="cancelProductBtn">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="saveProductBtn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+  import { api, ApiError } from '../assets/js/api-client.js';
+  import { resolveCurrentStore } from '../assets/js/retailer-context.js';
+  import { renderRetailerShell } from '../assets/js/retailer-shell.js';
+  import { showToast, formatMoney, setButtonLoading } from '../assets/js/ui.js';
+
+  const content = document.getElementById('content');
+  let currentStoreId = null;
+  let showLowStockOnly = false;
+  let editingProductId = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  async function init() {
+    const { store, allStores } = await resolveCurrentStore();
+    if (!store) { window.location.href = './store-setup.html'; return; }
+    currentStoreId = store.id;
+    renderRetailerShell({ activeTab: 'inventory.html', store, allStores });
+    await loadProducts();
+  }
+
+  async function loadProducts() {
+    content.innerHTML = `
+      <div class="page-header-row">
+        <h1 class="page-title" style="font-size:30px;">Inventory</h1>
+        <button class="btn btn-primary btn-sm" id="addProductBtn">+ Add product</button>
+      </div>
+      <label class="low-stock-toggle" style="margin-bottom:16px;">
+        <input type="checkbox" id="lowStockFilter" ${showLowStockOnly ? 'checked' : ''} /> Show low stock only
+      </label>
+      <div class="table-wrap" id="productsTable"><div class="skeleton" style="height:160px;"></div></div>
+    `;
+    document.getElementById('addProductBtn').addEventListener('click', () => openProductModal(null));
+    document.getElementById('lowStockFilter').addEventListener('change', (e) => {
+      showLowStockOnly = e.target.checked;
+      renderProducts();
+    });
+    await renderProducts();
+  }
+
+  async function renderProducts() {
+    const tableEl = document.getElementById('productsTable');
+    try {
+      const products = await api.listProducts(currentStoreId, { low_stock_only: showLowStockOnly || undefined });
+      if (products.length === 0) {
+        tableEl.innerHTML = `<div class="empty-state"><div class="icon">&#128230;</div><p>${showLowStockOnly ? 'No low-stock products right now.' : 'No products yet — add your first one.'}</p></div>`;
+        return;
+      }
+      tableEl.innerHTML = `
+        <table class="data-table">
+          <thead><tr><th>Product</th><th>Barcode</th><th>Price</th><th>Stock</th><th></th></tr></thead>
+          <tbody>
+            ${products.map(p => `
+              <tr>
+                <td>
+                  <div class="product-name-cell">
+                    ${p.is_low_stock ? '<span class="low-stock-dot" title="Low stock"></span>' : ''}
+                    <div><div style="font-weight:600;">${escapeHtml(p.name)}</div>${p.brand ? `<div style="font-size:11.5px;color:var(--ink-soft);">${escapeHtml(p.brand)}</div>` : ''}</div>
+                  </div>
+                </td>
+                <td class="mono" style="font-size:12px;">${escapeHtml(p.barcode)}</td>
+                <td class="mono">${formatMoney(p.price_paise)}${p.discount_percent > 0 ? ` <span style="color:var(--ink-faint); text-decoration:line-through; font-size:11px;">${formatMoney(p.mrp_paise)}</span>` : ''}</td>
+                <td class="mono" style="color:${p.is_low_stock ? 'var(--red)' : 'inherit'};">${p.stock_quantity}</td>
+                <td>
+                  <div class="row-actions">
+                    <button data-id="${p.id}" class="edit-btn">Edit</button>
+                    <button data-id="${p.id}" class="delete delete-btn">Delete</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+
+      tableEl.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', () => {
+        const product = products.find(p => p.id === btn.dataset.id);
+        openProductModal(product);
+      }));
+      tableEl.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', () => deleteProduct(btn.dataset.id)));
+    } catch (err) {
+      tableEl.innerHTML = `<div class="banner banner-error">Could not load products.</div>`;
+    }
+  }
+
+  async function deleteProduct(productId) {
+    if (!confirm('Remove this product from your active inventory?')) return;
+    try {
+      await api.deleteProduct(currentStoreId, productId);
+      showToast('Product removed', 'success');
+      renderProducts();
+    } catch (err) {
+      showToast((err instanceof ApiError && err.detail) || 'Could not delete product.', 'error');
+    }
+  }
+
+  // ---- Add/Edit modal ----
+  const productModal = document.getElementById('productModal');
+  const productForm = document.getElementById('productForm');
+  const modalError = document.getElementById('modalError');
+  const modalTitle = document.getElementById('modalTitle');
+  const saveBtn = document.getElementById('saveProductBtn');
+
+  function openProductModal(product) {
+    editingProductId = product?.id || null;
+    modalTitle.textContent = product ? 'Edit product' : 'Add product';
+    modalError.classList.add('hidden');
+    document.getElementById('pName').value = product?.name || '';
+    document.getElementById('pBrand').value = product?.brand || '';
+    document.getElementById('pBarcode').value = product?.barcode || '';
+    document.getElementById('pBarcode').disabled = Boolean(product); // barcode is immutable once set, matches backend (not in ProductUpdateRequest)
+    document.getElementById('pMrp').value = product ? (product.mrp_paise / 100).toFixed(2) : '';
+    document.getElementById('pDiscount').value = product?.discount_percent ?? 0;
+    document.getElementById('pStock').value = product?.stock_quantity ?? '';
+    document.getElementById('pThreshold').value = product?.low_stock_threshold ?? 5;
+    document.getElementById('pGst').value = product?.gst_percent ?? 0;
+    productModal.classList.add('show');
+  }
+
+  document.getElementById('cancelProductBtn').addEventListener('click', () => productModal.classList.remove('show'));
+
+  productForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    modalError.classList.add('hidden');
+
+    const mrpRupees = parseFloat(document.getElementById('pMrp').value);
+    if (isNaN(mrpRupees) || mrpRupees <= 0) {
+      modalError.textContent = 'Enter a valid MRP.';
+      modalError.classList.remove('hidden');
+      return;
+    }
+
+    setButtonLoading(saveBtn, true, 'Saving…');
+    try {
+      if (editingProductId) {
+        await api.updateProduct(currentStoreId, editingProductId, {
+          name: document.getElementById('pName').value.trim(),
+          brand: document.getElementById('pBrand').value.trim() || null,
+          mrp_paise: Math.round(mrpRupees * 100),
+          discount_percent: parseFloat(document.getElementById('pDiscount').value) || 0,
+          stock_quantity: parseInt(document.getElementById('pStock').value, 10),
+          low_stock_threshold: parseInt(document.getElementById('pThreshold').value, 10),
+          gst_percent: parseFloat(document.getElementById('pGst').value) || 0,
+        });
+      } else {
+        await api.createProduct(currentStoreId, {
+          name: document.getElementById('pName').value.trim(),
+          brand: document.getElementById('pBrand').value.trim() || null,
+          barcode: document.getElementById('pBarcode').value.trim() || null,
+          mrp_paise: Math.round(mrpRupees * 100),
+          discount_percent: parseFloat(document.getElementById('pDiscount').value) || 0,
+          stock_quantity: parseInt(document.getElementById('pStock').value, 10) || 0,
+          low_stock_threshold: parseInt(document.getElementById('pThreshold').value, 10) || 5,
+          gst_percent: parseFloat(document.getElementById('pGst').value) || 0,
+        });
+      }
+      productModal.classList.remove('show');
+      showToast(editingProductId ? 'Product updated' : 'Product added', 'success');
+      renderProducts();
+    } catch (err) {
+      modalError.textContent = (err instanceof ApiError && err.detail) || 'Could not save product.';
+      modalError.classList.remove('hidden');
+    } finally {
+      setButtonLoading(saveBtn, false);
+    }
+  });
+
+  init();
+</script>
+
+</body>
+</html>

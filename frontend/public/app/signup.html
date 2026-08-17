@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Create account — QuickCart</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="centered-shell">
+  <div style="width: 100%; max-width: 400px;">
+    <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 32px;">
+      <a href="../index.html" style="display:flex; align-items:center; gap:8px; text-decoration:none; color:var(--ink); font-family:'Bebas Neue',sans-serif; font-size:24px;">
+        <span class="logo-mark" aria-hidden="true"></span>QuickCart
+      </a>
+      <button class="theme-toggle" aria-label="Toggle dark mode"></button>
+    </div>
+
+    <span class="eyebrow">New here</span>
+    <h1 class="page-title">Create your account</h1>
+    <p class="page-sub">Start scanning and skip the line on your next visit.</p>
+
+    <div class="banner banner-error hidden" id="errorBanner" role="alert"></div>
+
+    <form id="signupForm" novalidate>
+      <div class="field">
+        <label for="fullName">Full name</label>
+        <input type="text" id="fullName" name="fullName" autocomplete="name" required />
+        <div class="field-error" id="fullNameError">Enter your full name.</div>
+      </div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" autocomplete="email" required />
+        <div class="field-error" id="emailError">Enter a valid email address.</div>
+      </div>
+      <div class="field">
+        <label for="phone">Phone <span style="color: var(--ink-faint); font-weight: 400;">(optional)</span></label>
+        <input type="tel" id="phone" name="phone" autocomplete="tel" />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="new-password" required minlength="8" />
+        <div class="field-hint">At least 8 characters.</div>
+        <div class="field-error" id="passwordError">Password must be at least 8 characters.</div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="submitBtn" style="margin-top: 4px;">Create account</button>
+    </form>
+
+    <p class="form-footer-link">Already have an account? <a href="./login.html">Sign in</a></p>
+  </div>
+</div>
+
+<script type="module">
+  import { api, ApiError, setSession } from '../assets/js/api-client.js';
+  import { initTheme, showToast, setButtonLoading } from '../assets/js/ui.js';
+
+  initTheme();
+
+  const form = document.getElementById('signupForm');
+  const errorBanner = document.getElementById('errorBanner');
+  const submitBtn = document.getElementById('submitBtn');
+
+  function showFieldError(input, errorEl, show) {
+    input.classList.toggle('invalid', show);
+    errorEl.classList.toggle('show', show);
+  }
+
+  function validate() {
+    const fullName = document.getElementById('fullName');
+    const email = document.getElementById('email');
+    const password = document.getElementById('password');
+    const nameValid = fullName.value.trim().length > 0;
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value);
+    const passwordValid = password.value.length >= 8;
+    showFieldError(fullName, document.getElementById('fullNameError'), !nameValid);
+    showFieldError(email, document.getElementById('emailError'), !emailValid);
+    showFieldError(password, document.getElementById('passwordError'), !passwordValid);
+    return nameValid && emailValid && passwordValid;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBanner.classList.add('hidden');
+    if (!validate()) return;
+
+    const payload = {
+      full_name: document.getElementById('fullName').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      phone: document.getElementById('phone').value.trim() || null,
+      password: document.getElementById('password').value,
+    };
+
+    setButtonLoading(submitBtn, true, 'Creating account…');
+    try {
+      const result = await api.customerSignup(payload);
+      if (result.token) {
+        setSession(result.token.access_token, 'customer');
+        showToast('Account created', 'success');
+        window.location.href = './stores.html';
+      } else {
+        // Email confirmation required — Supabase issued no session yet
+        showToast('Check your email to verify your account', 'success');
+        window.location.href = './login.html';
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.detail : 'Something went wrong. Please try again.';
+      errorBanner.textContent = message || 'Could not create your account.';
+      errorBanner.classList.remove('hidden');
+    } finally {
+      setButtonLoading(submitBtn, false);
+    }
+  });
+</script>
+
+</body>
+</html>

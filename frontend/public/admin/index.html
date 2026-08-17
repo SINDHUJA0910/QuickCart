@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin — QuickCart</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="retailer-shell">
+  <div class="retailer-topbar">
+    <a href="#" class="logo"><span class="logo-mark" aria-hidden="true"></span>QuickCart <span style="font-size:12px; color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; margin-left:6px;">ADMIN</span></a>
+    <button class="theme-toggle" aria-label="Toggle dark mode"></button>
+  </div>
+
+  <main class="retailer-main">
+    <div id="gate" class="centered-shell" style="min-height: 50vh;">
+      <div style="width:100%; max-width:380px;">
+        <span class="eyebrow">Restricted access</span>
+        <h1 class="page-title" style="font-size:26px; margin-top:10px;">Admin key</h1>
+        <p class="page-sub">This is a shared operator key, not a personal login — see docs/SECURITY.md.</p>
+        <div class="banner banner-error hidden" id="gateError"></div>
+        <div class="field">
+          <input type="password" id="adminKeyInput" placeholder="Admin key" />
+        </div>
+        <button class="btn btn-primary btn-block" id="unlockBtn">Unlock</button>
+      </div>
+    </div>
+
+    <div id="content" style="display:none;"></div>
+  </main>
+</div>
+
+<script type="module">
+  import { api, ApiError } from '../assets/js/api-client.js';
+  import { initTheme, formatMoney } from '../assets/js/ui.js';
+
+  initTheme();
+
+  const gate = document.getElementById('gate');
+  const content = document.getElementById('content');
+  const gateError = document.getElementById('gateError');
+  const keyInput = document.getElementById('adminKeyInput');
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  const savedKey = sessionStorage.getItem('quickcart_admin_key');
+  if (savedKey) unlock(savedKey);
+
+  document.getElementById('unlockBtn').addEventListener('click', () => unlock(keyInput.value.trim()));
+  keyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') unlock(keyInput.value.trim()); });
+
+  async function unlock(key) {
+    if (!key) return;
+    gateError.classList.add('hidden');
+    try {
+      const [stats, stores, health] = await Promise.all([
+        api.adminStats(key), api.adminStores(key), api.adminHealth(key),
+      ]);
+      sessionStorage.setItem('quickcart_admin_key', key);
+      gate.style.display = 'none';
+      content.style.display = 'block';
+      render(stats, stores, health);
+    } catch (err) {
+      gateError.textContent = 'Invalid admin key.';
+      gateError.classList.remove('hidden');
+    }
+  }
+
+  function render(stats, stores, health) {
+    content.innerHTML = `
+      <div class="page-header-row">
+        <h1 class="page-title" style="font-size:30px;">Platform overview</h1>
+        <span class="status-pill ${health.database_reachable ? 'active' : 'pending'}"><span class="dot"></span>${health.database_reachable ? 'All systems operational' : 'Degraded'}</span>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Total stores</div><div class="stat-value">${stats.total_stores}</div></div>
+        <div class="stat-card"><div class="stat-label">Total retailers</div><div class="stat-value">${stats.total_retailers}</div></div>
+        <div class="stat-card"><div class="stat-label">Total customers</div><div class="stat-value">${stats.total_customers}</div></div>
+        <div class="stat-card"><div class="stat-label">Total sessions</div><div class="stat-value">${stats.total_sessions}</div></div>
+        <div class="stat-card"><div class="stat-label">Platform revenue</div><div class="stat-value" style="font-size:18px;">${formatMoney(stats.total_revenue_paise)}</div></div>
+        <div class="stat-card ${stats.open_ai_alerts > 0 ? 'alert' : ''}"><div class="stat-label">Open AI alerts (all stores)</div><div class="stat-value">${stats.open_ai_alerts}</div></div>
+      </div>
+
+      <div class="section-label">All stores</div>
+      <div class="table-wrap">
+        ${stores.length === 0 ? '<div class="empty-state"><p>No stores registered yet.</p></div>' : `
+        <table class="data-table">
+          <thead><tr><th>Store</th><th>Type</th><th>Status</th><th>Retailer ID</th></tr></thead>
+          <tbody>
+            ${stores.map(s => `
+              <tr>
+                <td>${escapeHtml(s.name)}</td>
+                <td style="text-transform:capitalize;">${escapeHtml(s.store_type.replace('_', ' '))}</td>
+                <td><span class="status-pill ${s.is_active ? 'active' : 'pending'}"><span class="dot"></span>${s.is_active ? 'Active' : 'Inactive'}</span></td>
+                <td class="mono" style="font-size:11.5px;">${s.retailer_id.slice(0, 13)}…</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`}
+      </div>
+    `;
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard — QuickCart Retailer</title>
+<meta name="quickcart-api-base" content="http://localhost:8000/api/v1">
+<link rel="stylesheet" href="../assets/css/app.css">
+<style>
+  .mini-bars { display: flex; align-items: flex-end; gap: 4px; height: 90px; }
+  .mini-bars .bar { flex: 1; background: var(--green); border-radius: 3px 3px 0 0; opacity: 0.85; position: relative; }
+  .mini-bars .bar .bar-label { position: absolute; bottom: -18px; left: 0; right: 0; text-align: center; font-size: 9px; color: var(--ink-faint); font-family: 'IBM Plex Mono', monospace; }
+  .two-col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; }
+  @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="retailer-shell">
+  <div class="retailer-topbar" id="retailerTopbar"></div>
+
+  <main class="retailer-main">
+    <div id="retailerTabs"></div>
+
+    <div id="content">
+      <div class="skeleton" style="height:100px; margin-bottom:20px; border-radius:14px;"></div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  import { api, downloadTransactionsCsv } from '../assets/js/api-client.js';
+  import { resolveCurrentStore } from '../assets/js/retailer-context.js';
+  import { renderRetailerShell } from '../assets/js/retailer-shell.js';
+  import { showToast, formatMoney } from '../assets/js/ui.js';
+
+  const content = document.getElementById('content');
+  let currentStoreId = null;
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  async function init() {
+    const { store, allStores } = await resolveCurrentStore();
+
+    if (!store) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">&#127978;</div>
+          <p>You haven't set up a store yet.</p>
+          <a href="./store-setup.html" class="btn btn-primary" style="width:auto; display:inline-flex; margin-top:16px;">Create your first store</a>
+        </div>`;
+      document.getElementById('retailerTopbar').innerHTML = `
+        <a href="./dashboard.html" class="logo"><span class="logo-mark" aria-hidden="true"></span>QuickCart</a>`;
+      return;
+    }
+
+    currentStoreId = store.id;
+    renderRetailerShell({ activeTab: 'dashboard.html', store, allStores });
+    await loadDashboard(currentStoreId);
+  }
+
+  async function loadDashboard(storeId) {
+    try {
+      const [stats, transactions, topProducts, peakHours] = await Promise.all([
+        api.getDashboardStats(storeId),
+        api.getRecentTransactions(storeId),
+        api.getTopProducts(storeId),
+        api.getPeakHours(storeId),
+      ]);
+      renderStats(stats);
+      renderTransactions(transactions);
+      renderCharts(topProducts, peakHours);
+    } catch (err) {
+      content.innerHTML = `<div class="banner banner-error">Could not load dashboard data.</div>`;
+    }
+  }
+
+  function renderStats(stats) {
+    content.innerHTML = `
+      <div class="page-header-row">
+        <h1 class="page-title" style="font-size:30px;">Today at a glance</h1>
+        <button class="btn btn-ghost btn-sm" id="exportCsvBtn">&#8595; Export CSV</button>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Today's sales</div><div class="stat-value">${formatMoney(stats.todays_sales_paise)}</div></div>
+        <div class="stat-card"><div class="stat-label">Customers in store</div><div class="stat-value">${stats.customers_inside_store}</div></div>
+        <div class="stat-card"><div class="stat-label">Live sessions</div><div class="stat-value">${stats.live_sessions}</div></div>
+        <div class="stat-card ${stats.open_ai_alerts > 0 ? 'alert' : ''}"><div class="stat-label">Open AI alerts</div><div class="stat-value">${stats.open_ai_alerts}</div></div>
+        <div class="stat-card"><div class="stat-label">Monthly sales</div><div class="stat-value" style="font-size:18px;">${formatMoney(stats.monthly_sales_paise)}</div></div>
+        <div class="stat-card"><div class="stat-label">Total products</div><div class="stat-value">${stats.total_products}</div></div>
+        <div class="stat-card ${stats.low_stock_products > 0 ? 'alert' : ''}"><div class="stat-label">Low stock items</div><div class="stat-value">${stats.low_stock_products}</div></div>
+        <div class="stat-card"><div class="stat-label">Pending payments</div><div class="stat-value">${stats.pending_payments}</div></div>
+      </div>
+
+      <div class="two-col" style="margin-bottom: 28px;">
+        <div>
+          <div class="section-label">Recent transactions</div>
+          <div class="table-wrap" id="transactionsTable"></div>
+        </div>
+        <div>
+          <div class="section-label">Top products</div>
+          <div class="card card-pad" id="topProductsCard" style="margin-bottom:16px;"></div>
+          <div class="section-label">Peak hours</div>
+          <div class="card card-pad" id="peakHoursCard" style="padding-bottom: 28px;"></div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('exportCsvBtn').addEventListener('click', async () => {
+      try {
+        await downloadTransactionsCsv(currentStoreId);
+        showToast('Report downloaded', 'success');
+      } catch {
+        showToast('Could not download report', 'error');
+      }
+    });
+  }
+
+  function renderTransactions(transactions) {
+    const table = document.getElementById('transactionsTable');
+    if (transactions.length === 0) {
+      table.innerHTML = `<div class="empty-state"><p>No completed transactions yet.</p></div>`;
+      return;
+    }
+    table.innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Customer</th><th>Invoice</th><th>Total</th><th>Time</th></tr></thead>
+        <tbody>
+          ${transactions.map(t => `
+            <tr>
+              <td>${escapeHtml(t.customer_name)}</td>
+              <td class="mono">${escapeHtml(t.invoice_number || '—')}</td>
+              <td class="mono">${formatMoney(t.total_paise)}</td>
+              <td>${t.checkout_time ? new Date(t.checkout_time).toLocaleTimeString() : '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  function renderCharts(topProducts, peakHours) {
+    const topCard = document.getElementById('topProductsCard');
+    if (topProducts.length === 0) {
+      topCard.innerHTML = `<p style="color:var(--ink-soft); font-size:13px; margin:0;">No sales data yet.</p>`;
+    } else {
+      const maxRevenue = Math.max(...topProducts.map(p => p.revenue_paise));
+      topCard.innerHTML = topProducts.slice(0, 5).map(p => `
+        <div style="margin-bottom:10px;">
+          <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;">
+            <span>${escapeHtml(p.product_name)}</span><span class="mono">${formatMoney(p.revenue_paise)}</span>
+          </div>
+          <div style="height:6px; background:var(--line); border-radius:3px; overflow:hidden;">
+            <div style="height:100%; width:${(p.revenue_paise / maxRevenue * 100).toFixed(0)}%; background:var(--green);"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    const peakCard = document.getElementById('peakHoursCard');
+    if (peakHours.length === 0) {
+      peakCard.innerHTML = `<p style="color:var(--ink-soft); font-size:13px; margin:0;">No session data yet.</p>`;
+    } else {
+      const maxCount = Math.max(...peakHours.map(h => h.session_count));
+      peakCard.innerHTML = `<div class="mini-bars">` + peakHours.map(h => `
+        <div class="bar" style="height:${(h.session_count / maxCount * 100).toFixed(0)}%;">
+          <span class="bar-label">${h.hour}h</span>
+        </div>
+      `).join('') + `</div>`;
+    }
+  }
+
+  init();
+</script>
+
+</body>
+</html>
